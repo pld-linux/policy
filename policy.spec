@@ -1,16 +1,20 @@
 Summary:	SELinux example policy configuration
 Summary(pl):	Przyk³adowa konfiguracja polityki SELinuksa
 Name:		policy
-Version:	1.4.10
+Version:	1.6
 Release:	1
 Epoch:		1
 License:	GPL
 Group:		Base
-# taken from fedora
-Source0:	%{name}-%{version}.tar.bz2
-# Source0-md5:	f2acc6772ddd7be859f686f71b9d31ab
-Patch0:		%{name}-unapproved.patch
-Patch1:		%{name}-rhat.patch
+# from ftp://people.redhat.com/dwalsh/SELinux/srpms/policy-%{version}-*.src.rpm
+#Source0:	%{name}-%{version}.tar.bz2
+Source0:	http://www.nsa.gov/selinux/archives/%{name}-%{version}.tgz
+# Source0-md5:	ba0a09437f723ab30a90a5c1756c84f3
+Patch0:		%{name}-fedora.patch
+Patch1:		%{name}-20040222.patch
+Patch2:		%{name}-sh.patch
+Patch3:		%{name}-iptables.patch
+Patch4:		%{name}-postfix.patch
 BuildRequires:	checkpolicy
 BuildRequires:	policycoreutils >= 1.4-4
 BuildRequires:	m4
@@ -72,9 +76,19 @@ polityki. Zawiera policy.conf oraz wszystkie Makefile, makra i pliki
 %setup -q
 %patch0 -p1
 %patch1 -p1
+%patch2 -p1
+%patch3 -p1
+%patch4 -p1
+
+find . -name '*.orig' | xargs -r rm -f
+
+mv -f domains/misc/unused/* domains/misc
+mv -f domains/program/unused/* domains/program
+mv -f domains/program/{dpk*,gatekeeper*,qmail*} domains/program/unused
 
 %build
-%{__make} policy 
+%{__make} file_contexts/file_contexts
+%{__make} policy
 
 %install
 rm -rf $RPM_BUILD_ROOT
@@ -90,17 +104,25 @@ rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(644,root,root,755)
+%{_sysconfdir}/security/default_contexts
+%{_sysconfdir}/security/default_type
+%{_sysconfdir}/security/failsafe_context
+%{_sysconfdir}/security/initrc_context
 %dir %{_sysconfdir}/security/selinux
 %{_sysconfdir}/security/selinux/policy.*
-%{_sysconfdir}/security/*_*
+%dir %{_sysconfdir}/security/selinux/src
+%dir %{_sysconfdir}/security/selinux/src/policy
+%dir %{_sysconfdir}/security/selinux/src/policy/file_contexts
+%{_sysconfdir}/security/selinux/src/policy/file_contexts/file_contexts
 
 %files sources
 %defattr(644,root,root,755)
 %doc ChangeLog README
-# XXX: duplicate
-%dir %{_sysconfdir}/security/selinux
-%dir %{_sysconfdir}/security/selinux/src
 %{_sysconfdir}/security/selinux/src/policy.conf
-%dir %{_sysconfdir}/security/selinux/src/policy
 %config(noreplace) %verify(not size mtime md5) %{_sysconfdir}/security/selinux/src/policy/users
-%{_sysconfdir}/security/selinux/src/policy/[!u]*
+%{_sysconfdir}/security/selinux/src/policy/[!fu]*
+%{_sysconfdir}/security/selinux/src/policy/file_contexts/types.fc
+%{_sysconfdir}/security/selinux/src/policy/file_contexts/misc
+%{_sysconfdir}/security/selinux/src/policy/file_contexts/program
+%{_sysconfdir}/security/selinux/src/policy/flask
+%{_sysconfdir}/security/selinux/src/policy/fs_use
