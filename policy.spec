@@ -1,15 +1,15 @@
 # enter date when you got the policy
-%define	snap	20031226
 Summary:	SELinux example policy configuration
 Summary(pl):	Przyk³adowa konfiguracja polityki SELinuksa
 Name:		policy
-Version:	1.4_%{snap}
+Version:	1.4.10
 Release:	1
 License:	GPL
 Group:		Base
-Source0:	http://www.coker.com.au/selinux/%{name}.tgz
-# Source0-md5:	1f7cbff059f5e0e549fd68d351eb5c71
-Patch0:		%{name}-rhat.patch
+# taken from fedora
+Source0:	%{name}-%{version}.tar.bz2
+# Source0-md5:	f2acc6772ddd7be859f686f71b9d31ab
+Patch0:		%{name}-unapproved.patch
 BuildRequires:	checkpolicy
 BuildRequires:	m4
 BuildArch:	noarch
@@ -66,11 +66,11 @@ polityki. Zawiera policy.conf oraz wszystkie Makefile, makra i pliki
 ¼ród³owe.
 
 %prep
-%setup -q -n %{name}
+%setup -q
 %patch0 -p1
 
 %build
-%{__make} policy
+%{__make} policy 
 
 %install
 rm -rf $RPM_BUILD_ROOT
@@ -88,7 +88,6 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(644,root,root,755)
 %dir %{_sysconfdir}/security/selinux
 %{_sysconfdir}/security/selinux/policy.*
-%{_sysconfdir}/security/*_*
 
 %files sources
 %defattr(644,root,root,755)
