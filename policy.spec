@@ -1,4 +1,3 @@
-# enter date when you got the policy
 Summary:	SELinux example policy configuration
 Summary(pl):	Przyk³adowa konfiguracja polityki SELinuksa
 Name:		policy
@@ -11,7 +10,9 @@ Group:		Base
 Source0:	%{name}-%{version}.tar.bz2
 # Source0-md5:	f2acc6772ddd7be859f686f71b9d31ab
 Patch0:		%{name}-unapproved.patch
+Patch1:		%{name}-rhat.patch
 BuildRequires:	checkpolicy
+BuildRequires:	policycoreutils >= 1.4-4
 BuildRequires:	m4
 BuildArch:	noarch
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
@@ -55,7 +56,7 @@ Group:		Base
 Requires:	%{name} = %{epoch}:%{version}-%{release}
 Requires:	m4
 Requires:	make
-Requires:	policycoreutils
+Requires:	policycoreutils >= 1.4-4
 
 %description sources
 This subpackage includes the source files used to build the policy
@@ -70,6 +71,7 @@ polityki. Zawiera policy.conf oraz wszystkie Makefile, makra i pliki
 %prep
 %setup -q
 %patch0 -p1
+%patch1 -p1
 
 %build
 %{__make} policy 
