@@ -1,0 +1,10 @@
+--- policy-1.4.15/file_contexts/program/iptables.fc.orig	Fri Jan  9 08:15:02 2004
++++ policy-1.4.15/file_contexts/program/iptables.fc	Wed Feb 18 11:05:19 2004
+@@ -1,4 +1,4 @@
+ # iptables
+-/sbin/ipchains.*	--	system_u:object_r:iptables_exec_t
+-/sbin/iptables.* 	--	system_u:object_r:iptables_exec_t
+-/sbin/ip6tables.*	--	system_u:object_r:iptables_exec_t
++/usr/sbin/ipchains.*	--	system_u:object_r:iptables_exec_t
++/usr/sbin/iptables.* 	--	system_u:object_r:iptables_exec_t
++/usr/sbin/ip6tables.*	--	system_u:object_r:iptables_exec_t
