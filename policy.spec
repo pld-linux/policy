@@ -1,15 +1,15 @@
 Summary:	SELinux example policy configuration
 Summary(pl):	Przyk³adowa konfiguracja polityki SELinuksa
 Name:		policy
-Version:	1.6
-Release:	3
+Version:	1.8
+Release:	0.1
 Epoch:		1
 License:	GPL
 Group:		Base
 # from ftp://people.redhat.com/dwalsh/SELinux/srpms/policy-%{version}-*.src.rpm
 #Source0:	%{name}-%{version}.tar.bz2
 Source0:	http://www.nsa.gov/selinux/archives/%{name}-%{version}.tgz
-# Source0-md5:	ba0a09437f723ab30a90a5c1756c84f3
+# Source0-md5:	f4dacf660b0274265d5453dacba9a0ad
 Patch0:		%{name}-fedora.patch
 Patch1:		%{name}-20040222.patch
 Patch2:		%{name}-sh.patch
@@ -76,8 +76,8 @@ polityki. Zawiera policy.conf oraz wszystkie Makefile, makra i pliki
 
 %prep
 %setup -q
-%patch0 -p1
-%patch1 -p1
+##%patch0 -p1
+##%patch1 -p1
 %patch2 -p1
 %patch3 -p1
 %patch4 -p1
