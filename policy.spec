@@ -1,7 +1,7 @@
 Summary:	SELinux example policy configuration
 Summary(pl):	Przyk³adowa konfiguracja polityki SELinuksa
 Name:		policy
-Version:	1.14
+Version:	1.16
 Release:	0.1
 Epoch:		1
 License:	GPL
@@ -9,15 +9,15 @@ Group:		Base
 # from ftp://people.redhat.com/dwalsh/SELinux/srpms/policy-%{version}-*.src.rpm
 #Source0:	%{name}-%{version}.tar.bz2
 Source0:	http://www.nsa.gov/selinux/archives/%{name}-%{version}.tgz
-# Source0-md5:	c356d7d1c1112c046f17dc552bbd8582
+# Source0-md5:	bd781c50d259f8c7610cbcebaaff884d
 Patch0:		%{name}-sh.patch
 Patch1:		%{name}-iptables.patch
 Patch2:		%{name}-postfix.patch
 Patch3:		%{name}-login.patch
 Patch4:		%{name}-mgetty.patch
 Patch5:		%{name}-apache.patch
-BuildRequires:	checkpolicy >= 1.10
-BuildRequires:	policycoreutils >= 1.10
+BuildRequires:	checkpolicy >= 1.16
+BuildRequires:	policycoreutils >= 1.16
 BuildRequires:	m4
 BuildArch:	noarch
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
@@ -61,7 +61,7 @@ Group:		Base
 Requires:	%{name} = %{epoch}:%{version}-%{release}
 Requires:	m4
 Requires:	make
-Requires:	policycoreutils >= 1.4-4
+Requires:	policycoreutils >= 1.16
 
 %description sources
 This subpackage includes the source files used to build the policy
@@ -126,7 +126,7 @@ rm -rf $RPM_BUILD_ROOT
 %dir %{_sysconfdir}/selinux/strict/src/policy
 %config(noreplace) %verify(not size mtime md5) %{_sysconfdir}/selinux/strict/src/policy/users
 %dir %{_sysconfdir}/selinux/strict/src/policy/tunables
-%config(noreplace) %verify(not size mtime md5) %{_sysconfdir}/selinux/strict/src/policy/tunables/*.te
+%config(noreplace) %verify(not size mtime md5) %{_sysconfdir}/selinux/strict/src/policy/tunables/*.tun
 %{_sysconfdir}/selinux/strict/src/policy/[!tu]*
 %{_sysconfdir}/selinux/strict/src/policy/targeted
 %{_sysconfdir}/selinux/strict/src/policy/tmp
