@@ -1,10 +1,13 @@
---- policy-1.10/file_contexts/program/mta.fc.wiget	2004-03-03 21:55:54.000000000 +0100
-+++ policy-1.10/file_contexts/program/mta.fc	2004-04-13 22:15:30.405473207 +0200
-@@ -5,3 +5,4 @@
+--- policy-1.22/file_contexts/program/mta.fc.orig	2005-02-16 20:40:16.000000000 +0100
++++ policy-1.22/file_contexts/program/mta.fc	2005-03-12 01:49:55.546450608 +0100
+@@ -5,6 +5,7 @@
  /etc/aliases\.db	--	system_u:object_r:etc_aliases_t
  /var/spool/mail(/.*)?		system_u:object_r:mail_spool_t
  /var/mail(/.*)?			system_u:object_r:mail_spool_t
-+/etc/mail(/.*)?				system_u:object_r:etc_mail_t
++/etc/mail(/.*)?			system_u:object_r:etc_mail_t
+ ifdef(`postfix.te', `', `
+ /usr/sbin/sendmail.postfix --	system_u:object_r:sendmail_exec_t
+ /var/spool/postfix(/.*)?		system_u:object_r:mail_spool_t
 --- policy-1.18/file_contexts/program/postfix.fc.orig	2004-10-13 22:16:18.000000000 +0200
 +++ policy-1.18/file_contexts/program/postfix.fc	2004-11-04 21:55:49.397515200 +0100
 @@ -1,10 +1,6 @@
@@ -37,12 +40,12 @@
  /var/log/sendmail\.st		--	system_u:object_r:sendmail_log_t
  /var/log/mail(/.*)?			system_u:object_r:sendmail_log_t
  /var/run/sendmail\.pid		--	system_u:object_r:sendmail_var_run_t
---- policy-1.20/domains/program/unused/mta.te.orig	2005-01-05 17:38:40.000000000 +0100
-+++ policy-1.20/domains/program/unused/mta.te	2005-01-08 18:18:06.310467256 +0100
-@@ -80,3 +80,6 @@
- create_dir_file( system_mail_t, mqueue_spool_t)
+--- policy-1.22/domains/program/unused/mta.te.orig	2005-02-16 20:40:15.000000000 +0100
++++ policy-1.22/domains/program/unused/mta.te	2005-03-12 01:50:45.860801664 +0100
+@@ -83,3 +83,6 @@
  ')
  allow system_mail_t etc_runtime_t:file { getattr read };
+ allow system_mail_t urandom_device_t:chr_file read;
 +
 +# etc_mail_t is the type of /etc/mail.
 +type etc_mail_t, file_type, sysadmfile, usercanread;
