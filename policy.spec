@@ -4,6 +4,7 @@ Summary(pl):	Przyk³adowa konfiguracja polityki SELinuksa
 Name:		policy
 Version:	1.4.10
 Release:	1
+Epoch:		1
 License:	GPL
 Group:		Base
 # taken from fedora
@@ -51,6 +52,7 @@ aplikacji.
 Summary:	SELinux example policy configuration source files
 Summary(pl):	Pliki ¼ród³owe przyk³adowej konfiguracji polityki SELinuksa
 Group:		Base
+Requires:	%{name} = %{epoch}:%{version}-%{release}
 Requires:	m4
 Requires:	make
 Requires:	policycoreutils
