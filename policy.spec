@@ -103,9 +103,9 @@ install -d $RPM_BUILD_ROOT%{_sysconfdir}/security/selinux
 %{__make} install install-src \
 	DESTDIR=$RPM_BUILD_ROOT
 
-install policy.15 $RPM_BUILD_ROOT%{_sysconfdir}/security/selinux
+install policy.15 policy.16 $RPM_BUILD_ROOT%{_sysconfdir}/security/selinux
 
-rm -f $RPM_BUILD_ROOT%{_sysconfdir}/security/selinux/src/policy/{COPYING,ChangeLog,README,VERSION,policy.spec}
+rm -f $RPM_BUILD_ROOT%{_sysconfdir}/security/selinux/src/policy/{COPYING,ChangeLog,README,VERSION,policy.spec,policy.1[567]}
 
 %clean
 rm -rf $RPM_BUILD_ROOT
