@@ -1,5 +1,5 @@
---- policy-1.14/file_contexts/program/apache.fc.orig	2004-06-16 19:07:53.000000000 +0200
-+++ policy-1.14/file_contexts/program/apache.fc	2004-07-03 01:43:05.659329480 +0200
+--- policy-1.18/file_contexts/program/apache.fc.orig	2004-10-14 22:00:08.000000000 +0200
++++ policy-1.18/file_contexts/program/apache.fc	2004-11-04 22:01:45.133435120 +0100
 @@ -8,6 +8,7 @@
  /var/cache/httpd(/.*)?		system_u:object_r:httpd_cache_t
  /etc/httpd		-d	system_u:object_r:httpd_config_t
@@ -23,6 +23,6 @@
  /var/cache/mod_ssl(/.*)?	system_u:object_r:httpd_cache_t
 -/var/run/apache(2)?.pid.* --	system_u:object_r:httpd_var_run_t
 +/var/run/((apache)|(httpd))(2)?.pid.* --	system_u:object_r:httpd_var_run_t
+ /var/lib/httpd(/.*)?		system_u:object_r:httpd_var_lib_t
  /etc/apache-ssl(2)?(/.*)?	system_u:object_r:httpd_config_t
  /usr/lib/apache-ssl(/.*)? --	system_u:object_r:httpd_exec_t
- /usr/sbin/apache-ssl(2)? --	system_u:object_r:httpd_exec_t
