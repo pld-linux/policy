@@ -1,15 +1,15 @@
 Summary:	SELinux example policy configuration
 Summary(pl):	Przyk³adowa konfiguracja polityki SELinuksa
 Name:		policy
-Version:	1.10
-Release:	0.3
+Version:	1.14
+Release:	0.1
 Epoch:		1
 License:	GPL
 Group:		Base
 # from ftp://people.redhat.com/dwalsh/SELinux/srpms/policy-%{version}-*.src.rpm
 #Source0:	%{name}-%{version}.tar.bz2
 Source0:	http://www.nsa.gov/selinux/archives/%{name}-%{version}.tgz
-# Source0-md5:	7c36ee68efd14b001eaa28f87564b374
+# Source0-md5:	c356d7d1c1112c046f17dc552bbd8582
 Patch0:		%{name}-sh.patch
 Patch1:		%{name}-iptables.patch
 Patch2:		%{name}-postfix.patch
@@ -91,8 +91,10 @@ mv -f domains/program/{dpk*,gatekeeper*,qmail*} domains/program/unused
 %build
 %{__make} file_contexts/file_contexts
 %{__make} policy
+# for 2.6.7
 %{__make} policy \
-	POLICYCOMPAT="-c 16"
+	POLICYCOMPAT="-c 17"
+# for 2.4.26+selinux or <=2.6.5
 %{__make} policy \
 	POLICYCOMPAT="-c 15"
 
@@ -103,31 +105,29 @@ install -d $RPM_BUILD_ROOT%{_sysconfdir}/security/selinux
 %{__make} install install-src \
 	DESTDIR=$RPM_BUILD_ROOT
 
-install policy.15 policy.16 $RPM_BUILD_ROOT%{_sysconfdir}/security/selinux
+install policy.15 $RPM_BUILD_ROOT%{_sysconfdir}/selinux/strict/policy
 
-rm -f $RPM_BUILD_ROOT%{_sysconfdir}/security/selinux/src/policy/{COPYING,ChangeLog,README,VERSION,policy.spec,policy.1[567]}
+rm -f $RPM_BUILD_ROOT%{_sysconfdir}/selinux/strict/src/policy/{COPYING,ChangeLog,README,VERSION,policy.spec,policy.1[578]}
 
 %clean
 rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(644,root,root,755)
-%{_sysconfdir}/security/default_contexts
-%{_sysconfdir}/security/default_type
-%{_sysconfdir}/security/failsafe_context
-%{_sysconfdir}/security/initrc_context
-%dir %{_sysconfdir}/security/selinux
-%{_sysconfdir}/security/selinux/policy.*
-%{_sysconfdir}/security/selinux/file_contexts
+%dir %{_sysconfdir}/selinux
+%dir %{_sysconfdir}/selinux/strict
+%{_sysconfdir}/selinux/strict/contexts
+%{_sysconfdir}/selinux/strict/policy
 
 %files sources
 %defattr(644,root,root,755)
 %doc ChangeLog README
-%dir %{_sysconfdir}/security/selinux/src
-%{_sysconfdir}/security/selinux/src/policy.conf
-%dir %{_sysconfdir}/security/selinux/src/policy
-%config(noreplace) %verify(not size mtime md5) %{_sysconfdir}/security/selinux/src/policy/users
-%config(noreplace) %verify(not size mtime md5) %{_sysconfdir}/security/selinux/src/policy/tunable.te
-%{_sysconfdir}/security/selinux/src/policy/[!ut]*
-%{_sysconfdir}/security/selinux/src/policy/types
-%{_sysconfdir}/security/selinux/src/policy/tmp
+%dir %{_sysconfdir}/selinux/strict/src
+%dir %{_sysconfdir}/selinux/strict/src/policy
+%config(noreplace) %verify(not size mtime md5) %{_sysconfdir}/selinux/strict/src/policy/users
+%dir %{_sysconfdir}/selinux/strict/src/policy/tunables
+%config(noreplace) %verify(not size mtime md5) %{_sysconfdir}/selinux/strict/src/policy/tunables/*.te
+%{_sysconfdir}/selinux/strict/src/policy/[!tu]*
+%{_sysconfdir}/selinux/strict/src/policy/targeted
+%{_sysconfdir}/selinux/strict/src/policy/tmp
+%{_sysconfdir}/selinux/strict/src/policy/types
