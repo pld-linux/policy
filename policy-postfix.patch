@@ -29,22 +29,23 @@
  /usr/sbin/rmail		--	system_u:object_r:sendmail_exec_t
  /usr/sbin/sendmail.postfix --	system_u:object_r:sendmail_exec_t
  /var/spool/postfix(/[^/]+)?	system_u:object_r:postfix_spool_t
---- policy-1.10/file_contexts/program/sendmail.fc.wiget	2004-02-05 21:09:56.000000000 +0100
-+++ policy-1.10/file_contexts/program/sendmail.fc	2004-04-13 22:15:30.413471884 +0200
+--- policy-1.20/file_contexts/program/sendmail.fc.orig	2004-12-02 14:31:53.000000000 +0100
++++ policy-1.20/file_contexts/program/sendmail.fc	2005-01-08 18:16:21.982327544 +0100
 @@ -1,5 +1,4 @@
  # sendmail
 -/etc/mail(/.*)?				system_u:object_r:etc_mail_t
- /var/spool/(client)?mqueue(/.*)?	system_u:object_r:mqueue_spool_t
  /var/log/sendmail\.st		--	system_u:object_r:sendmail_log_t
  /var/log/mail(/.*)?			system_u:object_r:sendmail_log_t
---- policy-1.10/domains/program/unused/mta.te.wiget	2004-03-30 16:17:33.000000000 +0200
-+++ policy-1.10/domains/program/unused/mta.te	2004-04-13 22:15:30.418471056 +0200
-@@ -59,3 +59,5 @@
- allow mta_delivery_agent devtty_t:chr_file rw_file_perms;
- allow mta_delivery_agent { etc_runtime_t proc_t }:file { getattr read };
- 
+ /var/run/sendmail\.pid		--	system_u:object_r:sendmail_var_run_t
+--- policy-1.20/domains/program/unused/mta.te.orig	2005-01-05 17:38:40.000000000 +0100
++++ policy-1.20/domains/program/unused/mta.te	2005-01-08 18:18:06.310467256 +0100
+@@ -80,3 +80,6 @@
+ create_dir_file( system_mail_t, mqueue_spool_t)
+ ')
+ allow system_mail_t etc_runtime_t:file { getattr read };
++
 +# etc_mail_t is the type of /etc/mail.
-+type etc_mail_t, file_type, sysadmfile;
++type etc_mail_t, file_type, sysadmfile, usercanread;
 --- policy-1.10/domains/program/unused/pppd.te.wiget	2004-04-05 19:13:55.000000000 +0200
 +++ policy-1.10/domains/program/unused/pppd.te	2004-04-13 22:15:30.436468077 +0200
 @@ -42,8 +42,8 @@
@@ -58,8 +59,8 @@
  allow pppd_t postfix_master_exec_t:file read;
  allow postfix_postqueue_t pppd_t:fd use;
  allow postfix_postqueue_t pppd_t:process sigchld;
---- policy-1.18/domains/program/unused/postfix.te.orig	2004-10-19 18:00:24.000000000 +0200
-+++ policy-1.18/domains/program/unused/postfix.te	2004-11-04 21:58:50.812935864 +0100
+--- policy-1.20/domains/program/unused/postfix.te.orig	2005-01-05 17:38:40.000000000 +0100
++++ policy-1.20/domains/program/unused/postfix.te	2005-01-08 18:17:37.279880576 +0100
 @@ -8,8 +8,6 @@
  # Type for files created during execution of postfix.
  type postfix_var_run_t, file_type, sysadmfile, pidfile;
@@ -94,7 +95,16 @@
  read_locale(postfix_$1_t)
  allow postfix_$1_t etc_t:file { getattr read };
  allow postfix_$1_t self:unix_dgram_socket create_socket_perms;
-@@ -138,7 +137,7 @@
+@@ -96,7 +95,7 @@
+ dontaudit postfix_master_t selinux_config_t:dir search;
+ can_exec({ sysadm_mail_t system_mail_t }, postfix_master_exec_t)
+ ifdef(`distro_redhat', `
+-file_type_auto_trans({ sysadm_mail_t system_mail_t postfix_master_t }, postfix_etc_t, etc_aliases_t)
++file_type_auto_trans({ sysadm_mail_t system_mail_t postfix_master_t }, etc_mail_t, etc_aliases_t)
+ ', `
+ file_type_auto_trans({ sysadm_mail_t system_mail_t }, etc_t, etc_aliases_t)
+ ')
+@@ -140,7 +139,7 @@
  # for ls to get the current context
  allow postfix_master_t self:file { getattr read };
  ifdef(`direct_sysadm_daemon', `
@@ -103,7 +113,7 @@
  allow postfix_master_t devpts_t:dir search;
  ')
  
-@@ -222,8 +221,8 @@
+@@ -226,8 +225,8 @@
  allow postfix_cleanup_t self:process setrlimit;
  
  allow user_mail_domain postfix_spool_t:dir r_dir_perms;
@@ -114,16 +124,16 @@
  allow user_mail_domain self:capability dac_override;
  
  define(`postfix_user_domain', `
-@@ -329,7 +328,7 @@
+@@ -335,7 +334,7 @@
  domain_auto_trans(postfix_pipe_t, procmail_exec_t, procmail_t)
  ')
  ifdef(`sendmail.te', `
--allow sendmail_t postfix_etc_t:dir { search };
-+allow sendmail_t etc_mail_t:dir { search };
+-allow sendmail_t postfix_etc_t:dir search;
++allow sendmail_t etc_mail_t:dir search;
  ')
  
  # Program for creating database files
-@@ -337,7 +336,7 @@
+@@ -343,7 +342,7 @@
  base_file_read_access(postfix_map_t)
  allow postfix_map_t { etc_t etc_runtime_t }:{ file lnk_file } { getattr read };
  tmp_domain(postfix_map)
@@ -131,9 +141,9 @@
 +create_dir_file(postfix_map_t, etc_mail_t)
  allow postfix_map_t self:unix_stream_socket create_stream_socket_perms;
  dontaudit postfix_map_t proc_t:dir { getattr read search };
- dontaudit postfix_map_t local_login_t:fd { use };
-@@ -349,3 +348,29 @@
- can_network(postfix_map_t)
+ dontaudit postfix_map_t local_login_t:fd use;
+@@ -355,3 +354,29 @@
+ can_network_server(postfix_map_t)
  allow postfix_local_t mail_spool_t:dir { remove_name };
  allow postfix_local_t mail_spool_t:file { unlink };
 +
@@ -162,14 +172,14 @@
 +
 +# maybe this should be applied for mta_delivery_agent in general?
 +rw_dir_create_file(postfix_local_t, mail_spool_t)
---- policy-1.18/domains/program/unused/sendmail.te.orig	2004-10-13 20:23:11.000000000 +0200
-+++ policy-1.18/domains/program/unused/sendmail.te	2004-11-04 21:59:12.535633512 +0100
+--- policy-1.20/domains/program/unused/sendmail.te.orig	2005-01-03 22:31:18.000000000 +0100
++++ policy-1.20/domains/program/unused/sendmail.te	2005-01-08 18:18:10.537824600 +0100
 @@ -13,9 +13,6 @@
  # daemon started by the init rc scripts.
  #
  
 -# etc_mail_t is the type of /etc/mail.
--type etc_mail_t, file_type, sysadmfile;
+-type etc_mail_t, file_type, sysadmfile, usercanread;
 -
  daemon_domain(sendmail, `, nscd_client_domain, mta_delivery_agent, mail_server_domain, mail_server_sender', nosysadm)
  
