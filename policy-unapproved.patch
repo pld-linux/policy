@@ -1,0 +1,276 @@
+--- policy-1.4.10/domains/program/unused/sudo.te.unapproved	2004-01-25 00:37:29.000000000 -0500
++++ policy-1.4.10/domains/program/unused/sudo.te	2004-01-29 09:55:44.412416363 -0500
+@@ -13,3 +13,4 @@
+ allow sudo_t pam_var_run_t:file create_file_perms;
+ ')
+ 
++allow sudo_t var_run_t:dir { getattr };
+--- policy-1.4.10/domains/program/unused/rhgb.te.unapproved	2004-01-26 08:30:39.000000000 -0500
++++ policy-1.4.10/domains/program/unused/rhgb.te	2004-01-29 09:55:44.412416363 -0500
+@@ -66,3 +66,4 @@
+ # for a bug in the X server
+ dontaudit insmod_t initrc_xserver_t:tcp_socket { read write };
+ dontaudit insmod_t tty_device_t:chr_file { read write };
++allow rhgb_t fonts_t:dir { read search };
+--- policy-1.4.10/domains/program/unused/cups.te.unapproved	2004-01-22 06:07:04.000000000 -0500
++++ policy-1.4.10/domains/program/unused/cups.te	2004-01-29 09:55:44.412416363 -0500
+@@ -54,6 +54,10 @@
+ 
+ allow cupsd_t { etc_t etc_runtime_t }:file { getattr read };
+ can_exec(cupsd_t, initrc_exec_t)
++#
++# Satisfy readahead
++#
++allow initrc_t cupsd_log_t:file { getattr read };
+ allow cupsd_t proc_t:file r_file_perms;
+ allow cupsd_t proc_t:dir r_dir_perms;
+ allow cupsd_t self:file { getattr read };
+--- policy-1.4.10/domains/program/unused/sound-server.te.unapproved	2004-01-03 20:33:22.000000000 -0500
++++ policy-1.4.10/domains/program/unused/sound-server.te	2004-01-29 09:55:44.412416363 -0500
+@@ -40,3 +40,4 @@
+ # for yiff - probably need some rules for the client support too
+ allow soundd_t self:shm create_shm_perms;
+ tmpfs_domain(soundd)
++allow initrc_t sound_file_t:file { read };
+--- policy-1.4.10/domains/program/initrc.te.unapproved	2004-01-22 06:16:59.000000000 -0500
++++ policy-1.4.10/domains/program/initrc.te	2004-01-29 09:55:44.412416363 -0500
+@@ -73,12 +73,6 @@
+ # Use system operations.
+ allow initrc_t kernel_t:system *;
+ 
+-# Allow initrc_t to set the enforcing flag.
+-# The initrc_t domain is granted this permission for 
+-# people who want to use a development kernel and toggle
+-# into enforcing mode from an /etc/rc.d script.
+-can_setenforce(initrc_t)
+-
+ # Set values in /proc/sys.
+ can_sysctl(initrc_t)
+ 
+@@ -273,6 +267,12 @@
+ run_program(sysadm_t, sysadm_r, init, initrc_exec_t, initrc_t)
+ allow initrc_t privfd:fd use;
+ 
++# Transition to system_r:initrc_t upon executing init scripts.
++ifdef(`direct_sysadm_daemon', `
++role_transition sysadm_r initrc_exec_t system_r;
++domain_auto_trans(sysadm_t, initrc_exec_t, initrc_t)
++')
++
+ #
+ # Shutting down xinet causes these
+ #
+--- policy-1.4.10/domains/admin.te.unapproved	2004-01-25 05:41:27.000000000 -0500
++++ policy-1.4.10/domains/admin.te	2004-01-29 09:55:44.412416363 -0500
+@@ -34,6 +34,8 @@
+ # Allow administrator domains to set the enforcing flag.
+ can_setenforce(sysadm_t)
+ 
++allow sysadm_t userdomain:fd use;
++
+ define(`admin_tty_type', `{ sysadm_tty_device_t sysadm_devpts_t }')
+ 
+ 
+--- policy-1.4.10/file_contexts/types.fc.unapproved	2004-01-26 08:34:29.000000000 -0500
++++ policy-1.4.10/file_contexts/types.fc	2004-01-29 09:55:44.412416363 -0500
+@@ -209,6 +209,10 @@
+ /dev/mmetfgrab		-c	system_u:object_r:scanner_device_t
+ 
+ /proc(/.*)?			<<none>>
++/sys(/.*)?			<<none>>
++/tftpboot(/.*)?			system_u:object_r:tftpdir_t
++/opt(/.*)?			system_u:object_r:usr_t
++/misc(/.*)?			system_u:object_r:autofsdir_t
+ 
+ #
+ # /etc
+--- policy-1.4.10/macros/program/mozilla_macros.te.unapproved	2004-01-26 08:37:40.000000000 -0500
++++ policy-1.4.10/macros/program/mozilla_macros.te	2004-01-29 09:55:44.412416363 -0500
+@@ -77,14 +77,16 @@
+ allow $1_mozilla_t $1_home_t:file setattr;
+ ')dnl end if writehome
+ ',`
++file_type_auto_trans($1_mozilla_t, tmp_t, $1_tmp_t)
+ dontaudit $1_mozilla_t $1_home_t:dir { setattr read search getattr };
+ dontaudit $1_mozilla_t $1_home_t:file { setattr getattr };
+ ')dnl end if readhome
+ 
+-file_type_auto_trans($1_mozilla_t, tmp_t, $1_tmp_t)
+ allow $1_mozilla_t $1_t:unix_stream_socket { connectto };
+ allow $1_mozilla_t sysctl_net_t:dir { search };
+ allow $1_mozilla_t sysctl_t:dir { search };
+ 
++allow $1_mozilla_t $1_tmp_t:sock_file { create write };
+ allow $1_mozilla_t xdm_t:fifo_file { write read };
+ ')dnl end mozilla macro
++
+--- policy-1.4.10/macros/program/su_macros.te.unapproved	2004-01-08 04:36:03.000000000 -0500
++++ policy-1.4.10/macros/program/su_macros.te	2004-01-29 09:55:52.652846385 -0500
+@@ -20,7 +20,7 @@
+ ifdef(`su.te', `
+ define(`su_mini_domain', `
+ # Derived domain based on the calling user domain and the program.
+-type $1_su_t, domain, privlog;
++type $1_su_t, domain, privlog, privrole, privuser, privowner;
+ 
+ # Transition from the user domain to this domain.
+ domain_auto_trans($1_t, su_exec_t, $1_su_t)
+@@ -49,6 +49,17 @@
+ domain_auto_trans($1_su_t, shell_exec_t, $1_t)
+ allow $1_su_t bin_t:dir search;
+ allow $1_su_t bin_t:lnk_file read;
++# But allow transitions to other user domains for role changes.
++domain_trans($1_su_t, shell_exec_t, userdomain)
++can_setexec($1_su_t)
++
++# Get security decisions
++can_getsecurity($1_su_t)
++allow $1_su_t default_context_t:file { getattr read };
++
++# Relabel ttys and ptys.
++allow $1_su_t { device_t devpts_t }:dir search;
++allow $1_su_t { ttyfile ptyfile }:chr_file { relabelfrom relabelto };
+ 
+ allow $1_su_t privfd:fd use;
+ 
+--- policy-1.4.10/macros/global_macros.te.unapproved	2004-01-25 05:43:22.000000000 -0500
++++ policy-1.4.10/macros/global_macros.te	2004-01-29 09:55:44.422416885 -0500
+@@ -122,6 +122,12 @@
+ allow $1 node_type:node { tcp_send udp_send rawip_send };
+ allow $1 node_type:node { tcp_recv udp_recv rawip_recv };
+ 
++# 
++# Allow the domain to send to or receive from any port.
++# port_type is a type attribute for all port types.
++#
++allow $1 port_type:{tcp_socket udp_socket } { send_msg recv_msg };
++
+ #
+ # Allow the domain to send NFS client requests via the socket
+ # created by mount.
+@@ -228,9 +234,6 @@
+ type $1_exec_t, file_type, sysadmfile, exec_type;
+ 
+ role system_r types $1_t;
+-ifdef(`direct_sysadm_daemon', `
+-role_transition sysadm_r $1_exec_t system_r;
+-')
+ 
+ # Inherit and use descriptors from init.
+ allow $1_t init_t:fd use;
+@@ -276,8 +279,13 @@
+ rhgb_domain($1_t)
+ 
+ domain_auto_trans(initrc_t, $1_exec_t, $1_t)
+-ifdef(`direct_sysadm_daemon', `
++allow initrc_t $1_t:process { noatsecure siginh rlimitinh };
++ifdef(`direct_sysadm_daemon', ` 
++ifelse(`$3', `nosysadm', `', `
+ domain_auto_trans(sysadm_t, $1_exec_t, $1_t)
++allow sysadm_t $1_t:process { noatsecure siginh rlimitinh };
++role_transition sysadm_r $1_exec_t system_r;
++')
+ ')
+ allow $1_t privfd:fd use;
+ ifdef(`newrole.te', `allow $1_t newrole_t:process sigchld;')
+@@ -299,7 +307,7 @@
+ ')
+ 
+ define(`daemon_domain', `
+-daemon_base_domain($1, `$2')
++daemon_base_domain($1, `$2', $3)
+ # Create pid file.
+ allow $1_t var_t:dir { getattr search };
+ var_run_domain($1)
+--- policy-1.4.10/types/file.te.unapproved	2004-01-26 08:52:15.000000000 -0500
++++ policy-1.4.10/types/file.te	2004-01-29 09:55:44.422416885 -0500
+@@ -289,3 +289,12 @@
+ 
+ type dosfs_t, fs_type, root_dir_type, sysadmfile;
+ allow dosfs_t dosfs_t:filesystem associate;
++
++#
++# tftpdir_t is the type of files in the /tftpboot directories.
++#
++type tftpdir_t, file_type, sysadmfile;
++#
++# autofsdir_t is the type of files in the /misc directories.
++#
++type autofsdir_t, file_type, sysadmfile;
+--- policy-1.4.10/tunable.te.unapproved	2004-01-25 05:40:26.000000000 -0500
++++ policy-1.4.10/tunable.te	2004-01-29 09:55:44.422416885 -0500
+@@ -1,11 +1,11 @@
+ # uncomment to allow mozilla to read files in the user home directory
+-dnl define(`readhome')
++define(`readhome')
+ 
+ # uncomment to allow mozilla to write files in the user home directory
+-dnl define(`writehome')
++define(`writehome')
+ 
+ # uncomment to allow sysadm_t to do almost everything
+-dnl define(`unrestricted_admin')
++define(`unrestricted_admin')
+ 
+ # uncomment to make everything other than newrole and su run by a userdomain
+ # stay in the same userdomain
+@@ -26,4 +26,4 @@
+ dnl define(`ftp_home_dir')
+ 
+ # uncomment to allow sysadm_t to directly start daemons
+-dnl define(`direct_sysadm_daemon')
++define(`direct_sysadm_daemon')
+--- policy-1.4.10/users.unapproved	2004-01-25 05:44:29.000000000 -0500
++++ policy-1.4.10/users	2004-01-29 09:55:44.422416885 -0500
+@@ -48,7 +48,11 @@
+ ')
+ 
+ # sample for administrative user
++ifdef(`direct_sysadm_daemon', `
++#user jadmin roles { staff_r sysadm_r system_r };
++', `
+ #user jadmin roles { staff_r sysadm_r };
++')
+ 
+ # sample for regular user
+ #user jdoe roles { user_r };
+--- policy-1.4.10/homedir.py.unapproved	2004-01-26 09:27:09.000000000 -0500
++++ policy-1.4.10/homedir.py	2004-01-29 09:55:44.422416885 -0500
+@@ -1,37 +0,0 @@
+-#!/usr/bin/python
+-import commands
+-import sys
+-import os
+-
+-def getUsers():
+-	rc=commands.getstatusoutput("grep ^user users")
+-	udict={}
+-	if rc[0] == 0:
+-		ulist=rc[1].strip().split("\n")
+-		for u in ulist:
+-			user=u.split()
+-			if user[1]=="root" or user[1]=="user_u" or user[1]=="system_u":
+-				continue
+-			role = user[4].split("_r")[0]
+-			if role == "user":
+-				continue
+-			udict[user[1]]=role
+-	return udict
+-
+-def usage():
+-	print "Usage: %s" % sys.argv[0]
+-	sys.exit(1)
+-	
+-def update(filecontext, user, role):
+-	rc=commands.getstatusoutput("grep -h '/home/\[\^' %s | grep -v vmware | sed -e 's|/home/\[\^\/\]+|/home/%s|g' -e 's/user/%s/' -e 's/system_u/%s/'" % (filecontext, user, role, user))
+-	if rc[0] == 0:
+-		print rc[1]
+-	return rc
+-
+-try:
+-	users=getUsers()
+-	for u in users.keys():
+-		update(sys.argv[1], u, users[u]) 
+-except ValueError, error:
+-	print error
+-	
