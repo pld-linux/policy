@@ -1,23 +1,21 @@
 Summary:	SELinux example policy configuration
 Summary(pl):	Przyk³adowa konfiguracja polityki SELinuksa
 Name:		policy
-Version:	1.20
+Version:	1.22
 Release:	0.1
 Epoch:		1
 License:	GPL
 Group:		Base
-# from ftp://people.redhat.com/dwalsh/SELinux/srpms/policy-%{version}-*.src.rpm
-#Source0:	%{name}-%{version}.tar.bz2
 Source0:	http://www.nsa.gov/selinux/archives/%{name}-%{version}.tgz
-# Source0-md5:	475b1ac6ce558cc71d7a42492e9cfb89
+# Source0-md5:	9dffdbc2289a2edb48d02bf7fa23ddb0
 Patch0:		%{name}-sh.patch
 Patch1:		%{name}-iptables.patch
 Patch2:		%{name}-postfix.patch
 Patch3:		%{name}-login.patch
 Patch4:		%{name}-mgetty.patch
 Patch5:		%{name}-apache.patch
-BuildRequires:	checkpolicy >= 1.20
-BuildRequires:	policycoreutils >= 1.20
+BuildRequires:	checkpolicy >= 1.22
+BuildRequires:	policycoreutils >= 1.22
 BuildRequires:	m4
 BuildArch:	noarch
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
@@ -63,7 +61,7 @@ Group:		Base
 Requires:	%{name} = %{epoch}:%{version}-%{release}
 Requires:	m4
 Requires:	make
-Requires:	policycoreutils >= 1.20
+Requires:	policycoreutils >= 1.22
 
 %description sources
 This subpackage includes the source files used to build the policy
@@ -99,7 +97,6 @@ mv -f domains/program/{dpk*,gatekeeper*,qmail*} domains/program/unused
 
 %install
 rm -rf $RPM_BUILD_ROOT
-#install -d $RPM_BUILD_ROOT%{_sysconfdir}/security/selinux
 
 %{__make} install install-src \
 	DESTDIR=$RPM_BUILD_ROOT
@@ -116,10 +113,13 @@ rm -rf $RPM_BUILD_ROOT
 %dir %{_sysconfdir}/selinux
 %dir %{_sysconfdir}/selinux/%{poltype}
 %dir %{_sysconfdir}/selinux/%{poltype}/contexts
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/selinux/%{poltype}/contexts/customizable_types
 %config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/selinux/%{poltype}/contexts/default_type
 %config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/selinux/%{poltype}/contexts/*_context*
 %dir %{_sysconfdir}/selinux/%{poltype}/contexts/files
 %config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/selinux/%{poltype}/contexts/files/file_contexts
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/selinux/%{poltype}/contexts/files/file_contexts.homedirs
+%{_sysconfdir}/selinux/%{poltype}/contexts/files/homedir_template
 %config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/selinux/%{poltype}/contexts/files/media
 %dir %{_sysconfdir}/selinux/%{poltype}/contexts/users
 %config(noreplace) %verify(not md5 mtime size) %dir %{_sysconfdir}/selinux/%{poltype}/contexts/users/root
@@ -134,10 +134,10 @@ rm -rf $RPM_BUILD_ROOT
 %doc ChangeLog README
 %dir %{_sysconfdir}/selinux/%{poltype}/src
 %dir %{_sysconfdir}/selinux/%{poltype}/src/policy
-%config(noreplace) %verify(not size mtime md5) %{_sysconfdir}/selinux/%{poltype}/src/policy/local.users
-%config(noreplace) %verify(not size mtime md5) %{_sysconfdir}/selinux/%{poltype}/src/policy/users
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/selinux/%{poltype}/src/policy/local.users
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/selinux/%{poltype}/src/policy/users
 %dir %{_sysconfdir}/selinux/%{poltype}/src/policy/tunables
-%config(noreplace) %verify(not size mtime md5) %{_sysconfdir}/selinux/%{poltype}/src/policy/tunables/*.tun
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/selinux/%{poltype}/src/policy/tunables/*.tun
 %{_sysconfdir}/selinux/%{poltype}/src/policy/[!ltu]*
 %{_sysconfdir}/selinux/%{poltype}/src/policy/targeted
 %{_sysconfdir}/selinux/%{poltype}/src/policy/tmp
