@@ -1,14 +1,72 @@
---- policy-1.6/domains/program/unused/postfix.te.orig	Tue Feb 17 19:36:51 2004
-+++ policy-1.6/domains/program/unused/postfix.te	Thu Mar 11 12:48:25 2004
-@@ -8,7 +8,6 @@
+--- policy-1.10/file_contexts/program/mta.fc.wiget	2004-03-03 21:55:54.000000000 +0100
++++ policy-1.10/file_contexts/program/mta.fc	2004-04-13 22:15:30.405473207 +0200
+@@ -5,3 +5,4 @@
+ /etc/aliases\.db	--	system_u:object_r:etc_aliases_t
+ /var/spool/mail(/.*)?		system_u:object_r:mail_spool_t
+ /var/mail(/.*)?			system_u:object_r:mail_spool_t
++/etc/mail(/.*)?				system_u:object_r:etc_mail_t
+--- policy-1.10/file_contexts/program/postfix.fc.wiget	2004-04-05 19:13:55.000000000 +0200
++++ policy-1.10/file_contexts/program/postfix.fc	2004-04-13 22:15:30.409472545 +0200
+@@ -1,7 +1,6 @@
+ # postfix
+-/etc/postfix(/.*)?		system_u:object_r:postfix_etc_t
+-/etc/postfix/postfix-script.* -- system_u:object_r:postfix_exec_t
+-/etc/postfix/prng_exch	--	system_u:object_r:postfix_prng_t
++/etc/mail/postfix-script.* -- system_u:object_r:postfix_exec_t
++/etc/mail/prng_exch	--	system_u:object_r:postfix_prng_t
+ /usr/lib(exec)?/postfix/.*	--	system_u:object_r:postfix_exec_t
+ /usr/lib(exec)?/postfix/cleanup --	system_u:object_r:postfix_cleanup_exec_t
+ /usr/lib(exec)?/postfix/local	--	system_u:object_r:postfix_local_exec_t
+@@ -23,7 +22,7 @@
+ /usr/sbin/postlog	--	system_u:object_r:postfix_master_exec_t
+ /usr/sbin/postmap	--	system_u:object_r:postfix_master_exec_t
+ /usr/sbin/postqueue	--	system_u:object_r:postfix_postqueue_exec_t
+-/usr/sbin/postsuper	--	system_u:object_r:postfix_master_exec_t
++/usr/sbin/postsuper	--	system_u:object_r:postfix_postsuper_exec_t
+ /usr/sbin/rmail		--	system_u:object_r:sendmail_exec_t
+ /usr/sbin/sendmail.postfix --	system_u:object_r:sendmail_exec_t
+ /var/spool/postfix(/[^/]+)?	system_u:object_r:postfix_spool_t
+--- policy-1.10/file_contexts/program/sendmail.fc.wiget	2004-02-05 21:09:56.000000000 +0100
++++ policy-1.10/file_contexts/program/sendmail.fc	2004-04-13 22:15:30.413471884 +0200
+@@ -1,5 +1,4 @@
+ # sendmail
+-/etc/mail(/.*)?				system_u:object_r:etc_mail_t
+ /var/spool/(client)?mqueue(/.*)?	system_u:object_r:mqueue_spool_t
+ /var/log/sendmail\.st		--	system_u:object_r:sendmail_log_t
+ /var/log/mail(/.*)?			system_u:object_r:sendmail_log_t
+--- policy-1.10/domains/program/unused/mta.te.wiget	2004-03-30 16:17:33.000000000 +0200
++++ policy-1.10/domains/program/unused/mta.te	2004-04-13 22:15:30.418471056 +0200
+@@ -59,3 +59,5 @@
+ allow mta_delivery_agent devtty_t:chr_file rw_file_perms;
+ allow mta_delivery_agent { etc_runtime_t proc_t }:file { getattr read };
+ 
++# etc_mail_t is the type of /etc/mail.
++type etc_mail_t, file_type, sysadmfile;
+--- policy-1.10/domains/program/unused/pppd.te.wiget	2004-04-05 19:13:55.000000000 +0200
++++ policy-1.10/domains/program/unused/pppd.te	2004-04-13 22:15:30.436468077 +0200
+@@ -42,8 +42,8 @@
+ allow pppd_t pppd_secret_t:file r_file_perms;
+ 
+ ifdef(`postfix.te', `
+-allow pppd_t postfix_etc_t:dir search;
+-allow pppd_t postfix_etc_t:file r_file_perms;
++allow pppd_t etc_mail_t:dir search;
++allow pppd_t etc_mail_t:file r_file_perms;
+ allow pppd_t postfix_master_exec_t:file read;
+ allow postfix_postqueue_t pppd_t:fd use;
+ allow postfix_postqueue_t pppd_t:process sigchld;
+--- policy-1.10/domains/program/unused/postfix.te.wiget	2004-04-05 19:13:55.000000000 +0200
++++ policy-1.10/domains/program/unused/postfix.te	2004-04-13 22:16:43.909306866 +0200
+@@ -8,8 +8,6 @@
  # Type for files created during execution of postfix.
  type postfix_var_run_t, file_type, sysadmfile, pidfile;
  
--type etc_postfix_t, file_type, sysadmfile;
+-type postfix_etc_t, file_type, sysadmfile;
+-typealias postfix_etc_t alias etc_postfix_t;
  type postfix_exec_t, file_type, sysadmfile, exec_type;
  type postfix_public_t, file_type, sysadmfile;
  type postfix_private_t, file_type, sysadmfile;
-@@ -19,6 +18,7 @@
+@@ -20,6 +18,7 @@
  
  # postfix needs this for newaliases
  allow { system_mail_t sysadm_mail_t } tmp_t:dir getattr;
@@ -16,35 +74,44 @@
  
  #################################
  #
-@@ -27,13 +27,13 @@
+@@ -28,13 +27,13 @@
  # postfix_$1_exec_t is the type of the postfix_$1 executables.
  #
  define(`postfix_domain', `
--daemon_base_domain(postfix_$1, `$2')
+-daemon_core_rules(postfix_$1, `$2')
 +daemon_base_domain(postfix_$1, `$2', `nosysadm')
  allow postfix_$1_t self:process setpgid;
  allow postfix_$1_t postfix_master_t:process sigchld;
  allow postfix_master_t postfix_$1_t:process signal;
  
--allow postfix_$1_t { etc_t etc_postfix_t postfix_spool_t }:dir r_dir_perms;
--allow postfix_$1_t etc_postfix_t:file r_file_perms;
+-allow postfix_$1_t { etc_t postfix_etc_t postfix_spool_t }:dir r_dir_perms;
+-allow postfix_$1_t postfix_etc_t:file r_file_perms;
 +allow postfix_$1_t { etc_t etc_mail_t postfix_spool_t }:dir r_dir_perms;
 +allow postfix_$1_t etc_mail_t:file r_file_perms;
  read_locale(postfix_$1_t)
  allow postfix_$1_t etc_t:file { getattr read };
  allow postfix_$1_t self:unix_dgram_socket create_socket_perms;
-@@ -172,8 +172,8 @@
+@@ -123,7 +122,7 @@
+ # for ls to get the current context
+ allow postfix_master_t self:file { getattr read };
+ ifdef(`direct_sysadm_daemon', `
+-allow postfix_master_t postfix_etc_t:file rw_file_perms;
++allow postfix_master_t etc_mail_t:file rw_file_perms;
+ allow postfix_master_t devpts_t:dir search;
+ ')
+ 
+@@ -203,8 +202,8 @@
  allow postfix_cleanup_t self:process setrlimit;
  
  allow user_mail_domain postfix_spool_t:dir r_dir_perms;
--allow user_mail_domain etc_postfix_t:dir r_dir_perms;
--allow { user_mail_domain initrc_t } etc_postfix_t:file r_file_perms;
+-allow user_mail_domain postfix_etc_t:dir r_dir_perms;
+-allow { user_mail_domain initrc_t } postfix_etc_t:file r_file_perms;
 +allow user_mail_domain etc_mail_t:dir r_dir_perms;
 +allow { user_mail_domain initrc_t } etc_mail_t:file r_file_perms;
  allow user_mail_domain self:capability dac_override;
  
  define(`postfix_user_domain', `
-@@ -272,3 +272,29 @@
+@@ -304,3 +303,29 @@
  ifdef(`procmail.te', `
  domain_auto_trans(postfix_pipe_t, procmail_exec_t, procmail_t)
  ')
@@ -74,16 +141,8 @@
 +
 +# maybe this should be applied for mta_delivery_agent in general?
 +rw_dir_create_file(postfix_local_t, mail_spool_t)
---- policy-1.6/domains/program/unused/mta.te.orig	Sat Sep 27 02:53:14 2003
-+++ policy-1.6/domains/program/unused/mta.te	Thu Mar 11 12:48:02 2004
-@@ -53,3 +53,5 @@
- allow mta_delivery_agent devtty_t:chr_file rw_file_perms;
- allow mta_delivery_agent { etc_runtime_t proc_t }:file { getattr read };
- 
-+# etc_mail_t is the type of /etc/mail.
-+type etc_mail_t, file_type, sysadmfile;
---- policy-1.6/domains/program/unused/sendmail.te.orig	Thu Mar 11 12:46:47 2004
-+++ policy-1.6/domains/program/unused/sendmail.te	Thu Mar 11 12:48:01 2004
+--- policy-1.10/domains/program/unused/sendmail.te.wiget	2004-04-07 19:28:05.000000000 +0200
++++ policy-1.10/domains/program/unused/sendmail.te	2004-04-13 22:15:30.446466422 +0200
 @@ -13,9 +13,6 @@
  # daemon started by the init rc scripts.
  #
@@ -94,52 +153,3 @@
  daemon_domain(sendmail, `, mta_delivery_agent, mail_server_domain, mail_server_sender', nosysadm)
  
  tmp_domain(sendmail)
---- policy-1.6/file_contexts/program/postfix.fc.orig	Thu Mar 11 12:46:47 2004
-+++ policy-1.6/file_contexts/program/postfix.fc	Thu Mar 11 12:46:47 2004
-@@ -1,7 +1,6 @@
- # postfix
--/etc/postfix(/.*)?		system_u:object_r:etc_postfix_t
--/etc/postfix/postfix-script.* -- system_u:object_r:postfix_exec_t
--/etc/postfix/prng_exch	--	system_u:object_r:postfix_prng_t
-+/etc/mail/postfix-script.* -- system_u:object_r:postfix_exec_t
-+/etc/mail/prng_exch	--	system_u:object_r:postfix_prng_t
- /usr/lib(64)?/postfix/.*	--	system_u:object_r:postfix_exec_t
- /usr/lib(64)?/postfix/cleanup --	system_u:object_r:postfix_cleanup_exec_t
- /usr/lib(64)?/postfix/local	--	system_u:object_r:postfix_local_exec_t
-@@ -23,7 +22,7 @@
- /usr/sbin/postlog	--	system_u:object_r:postfix_master_exec_t
- /usr/sbin/postmap	--	system_u:object_r:postfix_master_exec_t
- /usr/sbin/postqueue	--	system_u:object_r:postfix_postqueue_exec_t
--/usr/sbin/postsuper	--	system_u:object_r:postfix_master_exec_t
-+/usr/sbin/postsuper	--	system_u:object_r:postfix_postsuper_exec_t
- /usr/sbin/rmail		--	system_u:object_r:sendmail_exec_t
- /var/spool/postfix(/[^/]+)?	system_u:object_r:postfix_spool_t
- /var/spool/postfix/active(/.*)?	system_u:object_r:postfix_spool_t
---- policy-1.6/file_contexts/program/mta.fc.orig	Thu Mar 11 12:46:47 2004
-+++ policy-1.6/file_contexts/program/mta.fc	Thu Mar 11 12:46:47 2004
-@@ -5,3 +5,4 @@
- /etc/aliases\.db	--	system_u:object_r:etc_aliases_t
- /var/spool/mail(/.*)?		system_u:object_r:mail_spool_t
- /var/mail(/.*)?			system_u:object_r:mail_spool_t
-+/etc/mail(/.*)?				system_u:object_r:etc_mail_t
---- policy-1.6/file_contexts/program/sendmail.fc.orig	Thu Feb  5 21:09:56 2004
-+++ policy-1.6/file_contexts/program/sendmail.fc	Thu Mar 11 12:46:47 2004
-@@ -1,5 +1,4 @@
- # sendmail
--/etc/mail(/.*)?				system_u:object_r:etc_mail_t
- /var/spool/(client)?mqueue(/.*)?	system_u:object_r:mqueue_spool_t
- /var/log/sendmail\.st		--	system_u:object_r:sendmail_log_t
- /var/log/mail(/.*)?			system_u:object_r:sendmail_log_t
---- policy-1.6/domains/program/unused/pppd.te.orig	Mon Feb  2 15:42:44 2004
-+++ policy-1.6/domains/program/unused/pppd.te	Thu Mar 11 12:49:44 2004
-@@ -35,8 +35,8 @@
- allow pppd_t pppd_secret_t:file r_file_perms;
- 
- ifdef(`postfix.te',
--`allow pppd_t etc_postfix_t:dir search;
--allow pppd_t etc_postfix_t:file r_file_perms;
-+`allow pppd_t etc_mail_t:dir search;
-+allow pppd_t etc_mail_t:file r_file_perms;
- allow pppd_t postfix_master_exec_t:file read;
- allow postfix_postqueue_t pppd_t:fd use;
- allow postfix_postqueue_t pppd_t:process sigchld;')

@@ -1,7 +1,7 @@
 Summary:	SELinux example policy configuration
 Summary(pl):	Przyk³adowa konfiguracja polityki SELinuksa
 Name:		policy
-Version:	1.8
+Version:	1.10
 Release:	0.1
 Epoch:		1
 License:	GPL
@@ -9,7 +9,7 @@ Group:		Base
 # from ftp://people.redhat.com/dwalsh/SELinux/srpms/policy-%{version}-*.src.rpm
 #Source0:	%{name}-%{version}.tar.bz2
 Source0:	http://www.nsa.gov/selinux/archives/%{name}-%{version}.tgz
-# Source0-md5:	f4dacf660b0274265d5453dacba9a0ad
+# Source0-md5:	7c36ee68efd14b001eaa28f87564b374
 Patch0:		%{name}-fedora.patch
 Patch1:		%{name}-20040222.patch
 Patch2:		%{name}-sh.patch
@@ -17,8 +17,8 @@ Patch3:		%{name}-iptables.patch
 Patch4:		%{name}-postfix.patch
 Patch5:		%{name}-login.patch
 Patch6:		%{name}-mgetty.patch
-BuildRequires:	checkpolicy
-BuildRequires:	policycoreutils >= 1.4-4
+BuildRequires:	checkpolicy >= 1.10
+BuildRequires:	policycoreutils >= 1.10
 BuildRequires:	m4
 BuildArch:	noarch
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
@@ -94,7 +94,9 @@ mv -f domains/program/{dpk*,gatekeeper*,qmail*} domains/program/unused
 %{__make} file_contexts/file_contexts
 %{__make} policy
 %{__make} policy \
-	POLICYCOMPAT="-c"
+	POLICYCOMPAT="-c 16"
+%{__make} policy \
+	POLICYCOMPAT="-c 15"
 
 %install
 rm -rf $RPM_BUILD_ROOT
@@ -118,19 +120,13 @@ rm -rf $RPM_BUILD_ROOT
 %{_sysconfdir}/security/initrc_context
 %dir %{_sysconfdir}/security/selinux
 %{_sysconfdir}/security/selinux/policy.*
-%dir %{_sysconfdir}/security/selinux/src
-%dir %{_sysconfdir}/security/selinux/src/policy
-%dir %{_sysconfdir}/security/selinux/src/policy/file_contexts
-%{_sysconfdir}/security/selinux/src/policy/file_contexts/file_contexts
+%{_sysconfdir}/security/selinux/file_contexts
 
 %files sources
 %defattr(644,root,root,755)
 %doc ChangeLog README
+%dir %{_sysconfdir}/security/selinux/src
 %{_sysconfdir}/security/selinux/src/policy.conf
+%dir %{_sysconfdir}/security/selinux/src/policy
 %config(noreplace) %verify(not size mtime md5) %{_sysconfdir}/security/selinux/src/policy/users
-%{_sysconfdir}/security/selinux/src/policy/[!fu]*
-%{_sysconfdir}/security/selinux/src/policy/file_contexts/types.fc
-%{_sysconfdir}/security/selinux/src/policy/file_contexts/misc
-%{_sysconfdir}/security/selinux/src/policy/file_contexts/program
-%{_sysconfdir}/security/selinux/src/policy/flask
-%{_sysconfdir}/security/selinux/src/policy/fs_use
+%{_sysconfdir}/security/selinux/src/policy/[!u]*
