@@ -2,7 +2,7 @@ Summary:	SELinux example policy configuration
 Summary(pl):	Przyk³adowa konfiguracja polityki SELinuksa
 Name:		policy
 Version:	1.6
-Release:	1
+Release:	2
 Epoch:		1
 License:	GPL
 Group:		Base
@@ -15,6 +15,8 @@ Patch1:		%{name}-20040222.patch
 Patch2:		%{name}-sh.patch
 Patch3:		%{name}-iptables.patch
 Patch4:		%{name}-postfix.patch
+Patch5:		%{name}-login.patch
+Patch6:		%{name}-mgetty.patch
 BuildRequires:	checkpolicy
 BuildRequires:	policycoreutils >= 1.4-4
 BuildRequires:	m4
@@ -79,6 +81,8 @@ polityki. Zawiera policy.conf oraz wszystkie Makefile, makra i pliki
 %patch2 -p1
 %patch3 -p1
 %patch4 -p1
+%patch5 -p1
+%patch6 -p1
 
 find . -name '*.orig' | xargs -r rm -f
 
