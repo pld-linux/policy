@@ -1,7 +1,7 @@
 Summary:	SELinux example policy configuration
 Summary(pl):	Przyk³adowa konfiguracja polityki SELinuksa
 Name:		policy
-Version:	1.16
+Version:	1.18
 Release:	0.1
 Epoch:		1
 License:	GPL
@@ -9,7 +9,7 @@ Group:		Base
 # from ftp://people.redhat.com/dwalsh/SELinux/srpms/policy-%{version}-*.src.rpm
 #Source0:	%{name}-%{version}.tar.bz2
 Source0:	http://www.nsa.gov/selinux/archives/%{name}-%{version}.tgz
-# Source0-md5:	bd781c50d259f8c7610cbcebaaff884d
+# Source0-md5:	f57f96e0b64012c89045dff3ac9f0d54
 Patch0:		%{name}-sh.patch
 Patch1:		%{name}-iptables.patch
 Patch2:		%{name}-postfix.patch
@@ -91,9 +91,6 @@ mv -f domains/program/{dpk*,gatekeeper*,qmail*} domains/program/unused
 %build
 %{__make} file_contexts/file_contexts
 %{__make} policy
-# for 2.6.7
-%{__make} policy \
-	POLICYCOMPAT="-c 17"
 # for 2.4.26+selinux or <=2.6.5
 %{__make} policy \
 	POLICYCOMPAT="-c 15"
@@ -107,7 +104,7 @@ install -d $RPM_BUILD_ROOT%{_sysconfdir}/security/selinux
 
 install policy.15 $RPM_BUILD_ROOT%{_sysconfdir}/selinux/strict/policy
 
-rm -f $RPM_BUILD_ROOT%{_sysconfdir}/selinux/strict/src/policy/{COPYING,ChangeLog,README,VERSION,policy.spec,policy.1[578]}
+rm -f $RPM_BUILD_ROOT%{_sysconfdir}/selinux/strict/src/policy/{COPYING,ChangeLog,README,VERSION,policy.spec,policy.1[58]}
 
 %clean
 rm -rf $RPM_BUILD_ROOT
