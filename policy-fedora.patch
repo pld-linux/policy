@@ -1,0 +1,983 @@
+diff -Nur policy-1.6/ChangeLog policy-1.6-dwalsh/ChangeLog
+--- policy-1.6/ChangeLog	Wed Feb 18 20:30:00 2004
++++ policy-1.6-dwalsh/ChangeLog	Sat Feb 21 13:42:05 2004
+@@ -1,3 +1,5 @@
++	* Merged diffs from Dan Walsh.
++
+ 1.6 2004-02-18
+ 	* Merged xfs support from Chris PeBenito.
+ 	* Merged conditional rules for ping.te.
+diff -Nur policy-1.6/domains/program/dmesg.te policy-1.6-dwalsh/domains/program/dmesg.te
+--- policy-1.6/domains/program/dmesg.te	Thu Jan  1 01:00:00 1970
++++ policy-1.6-dwalsh/domains/program/dmesg.te	Sat Feb 21 13:42:05 2004
+@@ -0,0 +1,19 @@
++#DESC dmesg - control kernel ring buffer
++#
++# Author:  Dan Walsh dwalsh@redhat.com
++#
++
++#################################
++#
++# Rules for the dmesg_t domain.
++#
++# dmesg_exec_t is the type of the dmesg executable.
++#
++daemon_domain(dmesg)
++
++#
++# Rules used for dmesg
++#
++allow dmesg_t dmesg_t:capability { sys_admin };
++allow dmesg_t kernel_t:system { syslog_read syslog_console };
++log_domain(dmesg)
+diff -Nur policy-1.6/domains/program/initrc.te policy-1.6-dwalsh/domains/program/initrc.te
+--- policy-1.6/domains/program/initrc.te	Tue Feb 17 19:36:50 2004
++++ policy-1.6-dwalsh/domains/program/initrc.te	Sat Feb 21 13:42:05 2004
+@@ -81,6 +81,12 @@
+ can_exec(initrc_t, bin_t)
+ can_exec(initrc_t, sbin_t)
+ can_exec(initrc_t, exec_type)
++#
++#  These rules are here to allow init scripts to su
++#
++role system_r types sysadm_su_t;
++domain_auto_trans(initrc_t, su_exec_t, sysadm_su_t)
++allow initrc_t self:passwd rootok;
+ 
+ # read /lib/modules
+ allow initrc_t modules_object_t:dir { search read };
+@@ -135,6 +141,7 @@
+ allow initrc_t wtmp_t:file { setattr rw_file_perms };
+ allow initrc_t var_log_t:file { setattr rw_file_perms };
+ allow initrc_t lastlog_t:file { setattr rw_file_perms };
++domain_auto_trans(initrc_t, dmesg_exec_t, dmesg_t)
+ 
+ # remove old locks
+ allow initrc_t lockfile:dir rw_dir_perms;
+@@ -289,3 +296,10 @@
+ 
+ # for lsof in shutdown scripts
+ allow initrc_t security_t:dir getattr;
++ifdef(`udev.te', `
++domain_auto_trans(initrc_t, udev_exec_t, udev_t)
++')
++allow initrc_t krb5_conf_t:file read;
++dontaudit initrc_t krb5_conf_t:file write;
++
++allow initrc_t dmesg_log_t:file { write };
+diff -Nur policy-1.6/domains/program/modutil.te policy-1.6-dwalsh/domains/program/modutil.te
+--- policy-1.6/domains/program/modutil.te	Mon Feb  2 15:42:41 2004
++++ policy-1.6-dwalsh/domains/program/modutil.te	Sat Feb 21 13:42:05 2004
+@@ -90,6 +90,9 @@
+ r_dir_file(insmod_t, modules_object_t)
+ 
+ allow insmod_t { var_t var_log_t }:dir search;
++ifdef(`xserver.te', `
++allow insmod_t xserver_log_t:file { getattr };
++')
+ rw_dir_create_file(insmod_t, var_log_ksyms_t)
+ allow insmod_t { etc_t etc_runtime_t }:file { getattr read };
+ 
+diff -Nur policy-1.6/domains/program/syslogd.te policy-1.6-dwalsh/domains/program/syslogd.te
+--- policy-1.6/domains/program/syslogd.te	Mon Feb  2 15:42:42 2004
++++ policy-1.6-dwalsh/domains/program/syslogd.te	Sat Feb 21 13:42:05 2004
+@@ -36,10 +36,6 @@
+ # Use capabilities.
+ allow syslogd_t self:capability { dac_override net_bind_service sys_resource };
+ 
+-# Inherit and use descriptors from init.
+-allow syslogd_t init_t:fd use;
+-allow syslogd_t { initrc_devpts_t console_device_t }:chr_file { read write };
+-
+ # Modify/create log files.
+ create_append_log_file(syslogd_t, var_log_t)
+ 
+@@ -68,8 +64,10 @@
+ allow logrotate_t syslogd_exec_t:file r_file_perms;
+ ')
+ 
+-# uncomment this to allow syslogd to log to virtual consoles
+-#allow syslogd_t tty_device_t:chr_file rw_file_perms;
++# for sending messages to logged in users
++allow syslogd_t initrc_var_run_t:file { read lock };
++dontaudit syslogd_t initrc_var_run_t:file write;
++allow syslogd_t ttyfile:chr_file { getattr write };
+ 
+ ifdef(`klogd.te', `', `
+ # Allow access to /proc/kmsg for syslog-ng
+diff -Nur policy-1.6/domains/program/unused/apache.te policy-1.6-dwalsh/domains/program/unused/apache.te
+--- policy-1.6/domains/program/unused/apache.te	Wed Feb 11 19:34:45 2004
++++ policy-1.6-dwalsh/domains/program/unused/apache.te	Sat Feb 21 13:42:05 2004
+@@ -104,6 +104,9 @@
+ allow httpd_t { usr_t lib_t }:file { getattr read ioctl };
+ allow httpd_t usr_t:lnk_file read;
+ 
++# for tomcat
++r_dir_file(httpd_t, var_lib_t)
++
+ # execute perl
+ can_exec(httpd_t, bin_t)
+ 
+diff -Nur policy-1.6/domains/program/unused/apmd.te policy-1.6-dwalsh/domains/program/unused/apmd.te
+--- policy-1.6/domains/program/unused/apmd.te	Mon Feb  2 15:42:43 2004
++++ policy-1.6-dwalsh/domains/program/unused/apmd.te	Sat Feb 21 13:42:05 2004
+@@ -90,3 +90,8 @@
+ # for ifconfig which is run all the time
+ dontaudit apmd_t sysctl_t:dir search;
+ ')
++
++ifdef(`udev.te', `
++allow apmd_t udev_t:file { getattr read };
++allow apmd_t udev_t:lnk_file { getattr read };
++')
+diff -Nur policy-1.6/domains/program/unused/bootloader.te policy-1.6-dwalsh/domains/program/unused/bootloader.te
+--- policy-1.6/domains/program/unused/bootloader.te	Wed Feb 11 19:34:45 2004
++++ policy-1.6-dwalsh/domains/program/unused/bootloader.te	Sat Feb 21 13:42:05 2004
+@@ -135,3 +135,9 @@
+ 
+ allow bootloader_t policy_config_t:dir { search read };
+ allow bootloader_t policy_config_t:file read;
++
++allow bootloader_t lib_t:file { getattr read };
++allow bootloader_t sysfs_t:dir { getattr };
++allow bootloader_t urandom_device_t:chr_file { read };
++allow bootloader_t var_t:file { read };
++
+diff -Nur policy-1.6/domains/program/unused/canna.te policy-1.6-dwalsh/domains/program/unused/canna.te
+--- policy-1.6/domains/program/unused/canna.te	Tue Feb 17 19:38:43 2004
++++ policy-1.6-dwalsh/domains/program/unused/canna.te	Sat Feb 21 13:42:05 2004
+@@ -13,6 +13,9 @@
+ logdir_domain(canna)
+ tmp_domain(canna)
+ 
+-allow canna_t self:unix_stream_socket create_socket_perms;
++allow canna_t self:unix_stream_socket { connectto create_socket_perms };
+ allow canna_t etc_t:file { getattr read };
+ allow canna_t usr_t:file { getattr read };
++allow canna_t initrc_tmp_t:dir { search };
++allow canna_t initrc_tmp_t:sock_file { write };
++allow canna_t initrc_t:unix_stream_socket { connectto };
+diff -Nur policy-1.6/domains/program/unused/cardmgr.te policy-1.6-dwalsh/domains/program/unused/cardmgr.te
+--- policy-1.6/domains/program/unused/cardmgr.te	Tue Feb 17 19:36:51 2004
++++ policy-1.6-dwalsh/domains/program/unused/cardmgr.te	Sat Feb 21 13:42:05 2004
+@@ -66,9 +66,17 @@
+ allow cardmgr_t proc_t:file { getattr read ioctl };
+ 
+ # Read /proc/PID directories for all domains (for fuser).
+-allow cardmgr_t domain:notdevfile_class_set r_file_perms;
+-allow cardmgr_t domain:dir r_dir_perms;
++can_ps(cardmgr_t, domain)
++allow cardmgr_t device_type:{ chr_file blk_file } getattr;
++allow cardmgr_t ttyfile:chr_file getattr;
++dontaudit cardmgr_t ptyfile:chr_file getattr;
++dontaudit cardmgr_t file_type:{ dir notdevfile_class_set } getattr;
++dontaudit cardmgr_t domain:{ fifo_file socket_class_set } getattr;
++dontaudit cardmgr_t proc_kmsg_t:file getattr;
++
++allow cardmgr_t tty_device_t:chr_file rw_file_perms;
+ 
+ ifdef(`apmd.te', `
+ domain_auto_trans(apmd_t, { cardctl_exec_t cardmgr_exec_t }, cardmgr_t)
+ ')
++
+diff -Nur policy-1.6/domains/program/unused/dbusd.te policy-1.6-dwalsh/domains/program/unused/dbusd.te
+--- policy-1.6/domains/program/unused/dbusd.te	Fri Jan  9 20:10:27 2004
++++ policy-1.6-dwalsh/domains/program/unused/dbusd.te	Sat Feb 21 13:42:05 2004
+@@ -17,4 +17,4 @@
+ allow { dbus_client_domain userdomain } dbusd_var_run_t:dir search;
+ allow { dbus_client_domain userdomain } dbusd_var_run_t:sock_file { write };
+ allow { dbus_client_domain userdomain } dbusd_t:unix_stream_socket { connectto };
+-
++can_ypbind(dbusd_t)
+diff -Nur policy-1.6/domains/program/unused/ftpd.te policy-1.6-dwalsh/domains/program/unused/ftpd.te
+--- policy-1.6/domains/program/unused/ftpd.te	Tue Feb 17 19:36:51 2004
++++ policy-1.6-dwalsh/domains/program/unused/ftpd.te	Sat Feb 21 13:42:05 2004
+@@ -45,9 +45,9 @@
+ allow ftpd_t self:unix_dgram_socket { sendto };
+ can_tcp_connect(userdomain, ftpd_t)
+ ', `
+-ifdef(`tcpd.te', `domain_auto_trans(tcpd_t, ftpd_exec_t, ftpd_t)')
+ ifdef(`inetd.te', `
+ domain_auto_trans(inetd_t, ftpd_exec_t, ftpd_t)
++ifdef(`tcpd.te', `domain_auto_trans(tcpd_t, ftpd_exec_t, ftpd_t)')
+ 
+ # Use sockets inherited from inetd.
+ allow ftpd_t inetd_t:fd use;
+@@ -102,4 +102,4 @@
+ allow ftpd_t nfs_t:dir r_dir_perms;
+ allow ftpd_t nfs_t:file r_file_perms;
+ ')dnl end if nfs_home_dirs
+-')
++')dnl end if ftp_home_dir
+diff -Nur policy-1.6/domains/program/unused/hotplug.te policy-1.6-dwalsh/domains/program/unused/hotplug.te
+--- policy-1.6/domains/program/unused/hotplug.te	Tue Feb 17 19:36:51 2004
++++ policy-1.6-dwalsh/domains/program/unused/hotplug.te	Sat Feb 21 13:42:05 2004
+@@ -36,6 +36,8 @@
+ 
+ allow initrc_t usbdevfs_t:file { getattr read };
+ r_dir_file(hotplug_t, usbdevfs_t)
++allow hotplug_t usbfs_t:dir r_dir_perms;
++allow hotplug_t usbfs_t:file { getattr read };
+ 
+ # read config files
+ allow hotplug_t etc_t:dir r_dir_perms;
+@@ -60,6 +62,9 @@
+ domain_auto_trans(kernel_t, hotplug_exec_t, hotplug_t)
+ domain_auto_trans(hotplug_t, mount_exec_t, mount_t)
+ domain_auto_trans(hotplug_t, ifconfig_exec_t, ifconfig_t)
++ifdef(`updfstab.te', `
++domain_auto_trans(hotplug_t, updfstab_exec_t, updfstab_t)
++')
+ 
+ # init scripts run /etc/hotplug/usb.rc
+ domain_auto_trans(initrc_t, etc_hotplug_t, hotplug_t)
+@@ -73,6 +78,7 @@
+ 
+ # for lsmod
+ dontaudit hotplug_t self:capability sys_module;
++dontaudit hotplug_t self:capability sys_admin;
+ 
+ # for access("/etc/bashrc", X_OK) on Red Hat
+ dontaudit hotplug_t self:capability dac_read_search;
+@@ -110,3 +116,7 @@
+ allow hotplug_t fixed_disk_device_t:blk_file { setattr };
+ allow hotplug_t removable_device_t:blk_file { setattr };
+ allow hotplug_t sound_device_t:chr_file { setattr };
++
++ifdef(`udev.te', `
++domain_auto_trans(hotplug_t, udev_exec_t, udev_t)
++')
+diff -Nur policy-1.6/domains/program/unused/irqbalance.te policy-1.6-dwalsh/domains/program/unused/irqbalance.te
+--- policy-1.6/domains/program/unused/irqbalance.te	Thu Jan  1 01:00:00 1970
++++ policy-1.6-dwalsh/domains/program/unused/irqbalance.te	Sat Feb 21 13:42:05 2004
+@@ -0,0 +1,15 @@
++#DESC IRQBALANCE - IRQ balance daemon
++#
++# Author:  Ulrich Drepper <drepper@redhat.com>
++#
++
++#################################
++#
++# Rules for the irqbalance_t domain.
++#
++daemon_domain(irqbalance)
++
++# irqbalance needs access to /proc.
++allow irqbalance_t proc_t:file { read getattr };
++allow irqbalance_t sysctl_irq_t:dir r_dir_perms;
++allow irqbalance_t sysctl_irq_t:file rw_file_perms;
+diff -Nur policy-1.6/domains/program/unused/postgresql.te policy-1.6-dwalsh/domains/program/unused/postgresql.te
+--- policy-1.6/domains/program/unused/postgresql.te	Mon Feb  2 16:07:18 2004
++++ policy-1.6-dwalsh/domains/program/unused/postgresql.te	Sat Feb 21 13:42:05 2004
+@@ -31,12 +31,12 @@
+ allow postgresql_t { var_spool_t cron_spool_t }:dir search;
+ 
+ # capability kill is for shutdown script
+-allow postgresql_t self:capability { kill dac_override dac_read_search chown fowner fsetid setuid setgid };
++allow postgresql_t self:capability { kill dac_override dac_read_search chown fowner fsetid setuid setgid sys_tty_config };
+ 
+ type etc_postgresql_t, file_type, sysadmfile;
+ type postgresql_db_t, file_type, sysadmfile;
+ 
+-log_domain(postgresql)
++logdir_domain(postgresql)
+ 
+ # allow crond to find /usr/lib/postgresql/bin/do.maintenance
+ allow crond_t postgresql_db_t:dir search;
+@@ -65,6 +65,11 @@
+ create_dir_file(postgresql_t, postgresql_db_t)
+ allow postgresql_t var_lib_t:dir { getattr search };
+ 
++# because postgresql start scripts are broken and put the pid file in the DB
++# directory
++allow initrc_t postgresql_db_t:dir { write remove_name };
++allow initrc_t postgresql_db_t:file rw_file_perms;
++
+ # read config files
+ allow postgresql_t { etc_t etc_runtime_t }:{ file lnk_file } { read getattr };
+ r_dir_file({ initrc_t postgresql_t }, etc_postgresql_t)
+diff -Nur policy-1.6/domains/program/unused/prelink.te policy-1.6-dwalsh/domains/program/unused/prelink.te
+--- policy-1.6/domains/program/unused/prelink.te	Wed Feb 11 20:07:48 2004
++++ policy-1.6-dwalsh/domains/program/unused/prelink.te	Sat Feb 21 13:42:05 2004
+@@ -26,15 +26,20 @@
+ allow prelink_t etc_prelink_t:file { getattr read };
+ allow prelink_t file_type:dir rw_dir_perms;
+ allow prelink_t file_type:lnk_file r_file_perms;
+-allow prelink_t { shlib_t sbin_t bin_t lib_t exec_type }:file { create_file_perms execute relabelto relabelfrom };
++allow prelink_t file_type:file { getattr };
++allow prelink_t { su_exec_t shlib_t sbin_t bin_t lib_t exec_type }:file { create_file_perms execute relabelto relabelfrom };
+ allow prelink_t self:capability { chown dac_override fowner fsetid };
+ allow prelink_t self:fifo_file rw_file_perms;
+ allow prelink_t self:file { getattr read };
+ dontaudit prelink_t sysctl_kernel_t:dir search;
+ dontaudit prelink_t sysctl_t:dir search;
+-allow prelink_t var_log_t:file { getattr append };
++allow prelink_t prelink_log_t:file create_file_perms;
++allow prelink_t etc_runtime_t:file { getattr read };
+ read_locale(prelink_t)
+ allow prelink_t urandom_device_t:chr_file { read };
+-allow prelink_t etc_runtime_t:file { getattr read };
+-allow prelink_t su_exec_t:file { getattr };
+-allow prelink_t admin_passwd_exec_t:file { getattr };
++allow prelink_t proc_t:file { getattr read };
++#
++# prelink_cache_t is the type of /etc/prelink.cache.
++#
++type prelink_cache_t, file_type, sysadmfile;
++file_type_auto_trans(prelink_t, etc_t, prelink_cache_t, file)
+diff -Nur policy-1.6/domains/program/unused/rpcd.te policy-1.6-dwalsh/domains/program/unused/rpcd.te
+--- policy-1.6/domains/program/unused/rpcd.te	Mon Feb  2 15:42:44 2004
++++ policy-1.6-dwalsh/domains/program/unused/rpcd.te	Sat Feb 21 13:42:05 2004
+@@ -48,6 +48,7 @@
+ 
+ # for /var/run/rpc.statd/ directory
+ allow rpcd_t rpcd_var_run_t:dir { setattr rw_dir_perms };
++r_dir_file(rpcd_t,var_yp_t);
+ 
+ ifdef(`rpm.te', `
+ allow rpcd_t self:capability { chown dac_override setgid setuid };
+diff -Nur policy-1.6/domains/program/unused/rpm.te policy-1.6-dwalsh/domains/program/unused/rpm.te
+--- policy-1.6/domains/program/unused/rpm.te	Fri Feb 13 19:53:34 2004
++++ policy-1.6-dwalsh/domains/program/unused/rpm.te	Sat Feb 21 13:42:05 2004
+@@ -67,8 +67,6 @@
+ dontaudit initrc_t pidfile:file ioctl;
+ 
+ allow rpm_t device_t:dir rw_dir_perms;
+-allow rpm_t sysadmfile:dir create_dir_perms;
+-allow rpm_t sysadmfile:{ file lnk_file fifo_file sock_file } create_file_perms;
+ 
+ allow rpm_t proc_t:dir { getattr search };
+ allow rpm_t proc_t:file { getattr read };
+@@ -81,11 +79,20 @@
+ can_getcon(rpm_t)
+ can_setfscreate(rpm_t)
+ 
++# read/write/create any files in the system
+ allow rpm_t { file_type -shadow_t }:{ file lnk_file dir } { relabelfrom relabelto };
++allow rpm_t sysadmfile:dir create_dir_perms;
++allow rpm_t sysadmfile:{ file lnk_file fifo_file sock_file } create_file_perms;
++allow rpm_t file_type:{ chr_file blk_file } getattr;
++allow rpm_t sysfs_t:filesystem { getattr };
++allow rpm_t tmpfs_t:filesystem { getattr };
++dontaudit rpm_t domain:{ socket unix_dgram_socket udp_socket unix_stream_socket tcp_socket fifo_file rawip_socket packet_socket } getattr;
++
++# allow compiling and loading new policy
++create_dir_file(rpm_t, { policy_src_t policy_config_t })
++
+ allow rpm_t devpts_t:dir { search };
+ allow rpm_t policy_config_t:dir { search };
+-allow rpm_t policy_src_t:dir { search };
+-allow rpm_t policy_src_t:file { getattr read };
+ allow rpm_t self:capability sys_tty_config;
+ can_getsecurity(rpm_t)
+ dontaudit rpm_t shadow_t:file { getattr read };
+@@ -112,3 +119,4 @@
+ allow rpm_script_t self:capability { chown dac_override setgid setuid sys_chroot };
+ 
+ allow rpm_script_t self:process { fork signal_perms };
++
+diff -Nur policy-1.6/domains/program/unused/slocate.te policy-1.6-dwalsh/domains/program/unused/slocate.te
+--- policy-1.6/domains/program/unused/slocate.te	Tue Feb 17 19:36:51 2004
++++ policy-1.6-dwalsh/domains/program/unused/slocate.te	Sat Feb 21 13:42:05 2004
+@@ -57,7 +57,7 @@
+ dontaudit locate_t locate_t:capability dac_override;
+ allow locate_t locate_t:capability dac_read_search;
+ 
+-# sysadm_t runs slocate in his own domain.
++# sysadm_t runs locate in his own domain.
+ # We use a type alias to simplify the rest of the policy,
+ # which often refers to $1_locate_t for the user domains.
+ typealias sysadm_t alias sysadm_locate_t;
+diff -Nur policy-1.6/domains/program/unused/spamd.te policy-1.6-dwalsh/domains/program/unused/spamd.te
+--- policy-1.6/domains/program/unused/spamd.te	Mon Feb  2 17:52:44 2004
++++ policy-1.6-dwalsh/domains/program/unused/spamd.te	Sat Feb 21 13:42:05 2004
+@@ -13,6 +13,7 @@
+ 
+ general_domain_access(spamd_t)
+ uses_shlib(spamd_t)
++can_ypbind(spamd_t)
+ 
+ # Various Perl bits
+ allow spamd_t lib_t:file rx_file_perms;
+diff -Nur policy-1.6/domains/program/unused/udev.te policy-1.6-dwalsh/domains/program/unused/udev.te
+--- policy-1.6/domains/program/unused/udev.te	Thu Jan  1 01:00:00 1970
++++ policy-1.6-dwalsh/domains/program/unused/udev.te	Sat Feb 21 13:42:05 2004
+@@ -0,0 +1,31 @@
++#DESC udev - Linux configurable dynamic device naming support
++#
++# Author:  Dan Walsh dwalsh@redhat.com
++#
++
++#################################
++#
++# Rules for the udev_t domain.
++#
++# udev_exec_t is the type of the udev executable.
++#
++daemon_domain(udev, `, privmodule')
++
++type etc_udev_t, file_type, sysadmfile;
++
++#
++# Rules used for udev
++#
++create_dir_file(udev_t,device_t)
++allow udev_t self:capability { dac_override dac_read_search mknod };
++allow udev_t self:file { getattr read };
++allow udev_t self:unix_stream_socket {connectto create_stream_socket_perms};
++
++allow udev_t device_t:blk_file create_file_perms;
++allow udev_t device_t:chr_file create_file_perms;
++allow udev_t device_t:sock_file create_file_perms;
++allow udev_t etc_t:file { getattr read };
++allow udev_t sbin_t:dir r_dir_perms;
++can_exec(udev_t, sbin_t)
++can_exec(udev_t, udev_exec_t)
++r_dir_file(udev_t, sysfs_t)
+diff -Nur policy-1.6/domains/program/unused/xdm.te policy-1.6-dwalsh/domains/program/unused/xdm.te
+--- policy-1.6/domains/program/unused/xdm.te	Tue Feb 17 19:36:51 2004
++++ policy-1.6-dwalsh/domains/program/unused/xdm.te	Sat Feb 21 13:42:05 2004
+@@ -23,8 +23,11 @@
+ # for running xdm from init
+ domain_auto_trans(init_t, xdm_exec_t, xdm_t)
+ 
++allow xdm_t xdm_var_run_t:dir setattr;
++
+ # for xdmctl
+ allow xdm_t xdm_var_run_t:fifo_file create_file_perms;
++allow initrc_t xdm_var_run_t:fifo_file unlink;
+ 
+ tmp_domain(xdm)
+ var_lib_domain(xdm)
+@@ -237,3 +240,16 @@
+ # for .dmrc
+ allow xdm_t user_home_dir_type:dir search;
+ allow xdm_t user_home_type:file { getattr read };
++
++allow xdm_t mnt_t:dir { getattr read search };
++#
++# Wants to delete .xsession-errors file
++#
++allow xdm_t user_home_type:file { unlink };
++#
++# Should fix exec of pam_timestamp_check is not closing xdm file descriptor
++#
++ifdef(`pam.te', `
++dontaudit pam_t xdm_t:fd { use };
++')
++
+diff -Nur policy-1.6/domains/program/unused/xfs.te policy-1.6-dwalsh/domains/program/unused/xfs.te
+--- policy-1.6/domains/program/unused/xfs.te	Thu Feb  5 21:09:56 2004
++++ policy-1.6-dwalsh/domains/program/unused/xfs.te	Sat Feb 21 13:42:05 2004
+@@ -27,6 +27,7 @@
+ allow xfs_t proc_t:file { getattr read };
+ 
+ allow xfs_t self:process setpgid;
++can_ypbind(xfs_t)
+ 
+ # Use capabilities.
+ allow xfs_t xfs_t:capability { setgid setuid };
+diff -Nur policy-1.6/domains/user.te policy-1.6-dwalsh/domains/user.te
+--- policy-1.6/domains/user.te	Thu Feb  5 21:09:55 2004
++++ policy-1.6-dwalsh/domains/user.te	Sat Feb 21 13:42:05 2004
+@@ -13,6 +13,11 @@
+ can_ps(staff_t, unpriv_userdomain)
+ allow staff_t { ttyfile ptyfile tty_device_t }:chr_file getattr;
+ 
++ifdef(`staff_read_sysadm_file', `
++allow staff_t sysadm_home_dir_t:dir { getattr search };
++allow staff_t sysadm_home_t:file { getattr read };
++')
++
+ # Allow staff to run su
+ ifdef(`su.te', `
+ su_domain(staff)
+diff -Nur policy-1.6/file_contexts/program/amanda.fc policy-1.6-dwalsh/file_contexts/program/amanda.fc
+--- policy-1.6/file_contexts/program/amanda.fc	Wed Nov 19 21:15:23 2003
++++ policy-1.6-dwalsh/file_contexts/program/amanda.fc	Sat Feb 21 13:42:05 2004
+@@ -1,7 +1,7 @@
+ #
+ # Author:  Carsten Grohmann <carstengrohmann@gmx.de>
+ #
+-# $Id$
++# $Id$
+ #
+ 
+ # amanda
+diff -Nur policy-1.6/file_contexts/program/dmesg.fc policy-1.6-dwalsh/file_contexts/program/dmesg.fc
+--- policy-1.6/file_contexts/program/dmesg.fc	Thu Jan  1 01:00:00 1970
++++ policy-1.6-dwalsh/file_contexts/program/dmesg.fc	Sat Feb 21 13:42:05 2004
+@@ -0,0 +1,2 @@
++# dmesg
++/bin/dmesg	--	system_u:object_r:dmesg_exec_t
+diff -Nur policy-1.6/file_contexts/program/irqbalance.fc policy-1.6-dwalsh/file_contexts/program/irqbalance.fc
+--- policy-1.6/file_contexts/program/irqbalance.fc	Thu Jan  1 01:00:00 1970
++++ policy-1.6-dwalsh/file_contexts/program/irqbalance.fc	Sat Feb 21 13:42:05 2004
+@@ -0,0 +1,2 @@
++# irqbalance
++/usr/sbin/irqbalance	-- system_u:object_r:irqbalance_exec_t
+diff -Nur policy-1.6/file_contexts/program/named.fc policy-1.6-dwalsh/file_contexts/program/named.fc
+--- policy-1.6/file_contexts/program/named.fc	Mon Feb  2 15:42:46 2004
++++ policy-1.6-dwalsh/file_contexts/program/named.fc	Sat Feb 21 13:42:05 2004
+@@ -8,7 +8,7 @@
+ /usr/sbin/named.*      	--	system_u:object_r:named_exec_t
+ /usr/sbin/r?ndc		--	system_u:object_r:ndc_exec_t
+ /var/cache/bind(/.*)?		system_u:object_r:named_cache_t
+-/var/run/ndc		--	system_u:object_r:named_var_run_t
++/var/run/ndc		-s	system_u:object_r:named_var_run_t
+ /var/run/bind(/.*)?		system_u:object_r:named_var_run_t
+ /var/run/named.*		system_u:object_r:named_var_run_t
+ /usr/sbin/lwresd	--	system_u:object_r:named_exec_t
+diff -Nur policy-1.6/file_contexts/program/prelink.fc policy-1.6-dwalsh/file_contexts/program/prelink.fc
+--- policy-1.6/file_contexts/program/prelink.fc	Tue Feb 17 19:36:52 2004
++++ policy-1.6-dwalsh/file_contexts/program/prelink.fc	Sat Feb 21 13:42:05 2004
+@@ -1,3 +1,5 @@
+ # prelink - prelink ELF shared libraries and binaries to speed up startup time
+ /usr/sbin/prelink		--	system_u:object_r:prelink_exec_t
+ /etc/prelink.conf		--	system_u:object_r:etc_prelink_t
++/var/log/prelink.log		--	system_u:object_r:prelink_log_t
++/etc/prelink.cache		--	system_u:object_r:prelink_cache_t
+diff -Nur policy-1.6/file_contexts/program/udev.fc policy-1.6-dwalsh/file_contexts/program/udev.fc
+--- policy-1.6/file_contexts/program/udev.fc	Thu Jan  1 01:00:00 1970
++++ policy-1.6-dwalsh/file_contexts/program/udev.fc	Sat Feb 21 13:42:05 2004
+@@ -0,0 +1,3 @@
++# udev
++/sbin/udevsend	--	system_u:object_r:udev_exec_t
++/sbin/udev	--	system_u:object_r:udev_exec_t
+diff -Nur policy-1.6/file_contexts/program/xdm.fc policy-1.6-dwalsh/file_contexts/program/xdm.fc
+--- policy-1.6/file_contexts/program/xdm.fc	Fri Feb 13 19:53:38 2004
++++ policy-1.6-dwalsh/file_contexts/program/xdm.fc	Sat Feb 21 13:42:05 2004
+@@ -14,6 +14,6 @@
+ /etc/X11/wdm/Xreset.*	--	system_u:object_r:xsession_exec_t
+ /etc/X11/wdm/Xsession	--	system_u:object_r:xsession_exec_t
+ /etc/X11/xdm/Xsession	--	system_u:object_r:xsession_exec_t
+-/var/run/xdmctl			system_u:object_r:xdm_var_run_t
++/var/run/xdmctl(/.*)?		system_u:object_r:xdm_var_run_t
+ /var/run/console.*		system_u:object_r:xdm_var_run_t
+ /var/lib/kdm(/.*)?		system_u:object_r:xdm_var_lib_t
+diff -Nur policy-1.6/file_contexts/types.fc policy-1.6-dwalsh/file_contexts/types.fc
+--- policy-1.6/file_contexts/types.fc	Tue Feb 17 19:36:51 2004
++++ policy-1.6-dwalsh/file_contexts/types.fc	Sat Feb 21 13:42:05 2004
+@@ -397,6 +397,7 @@
+ /var/log/btmp.*		--	system_u:object_r:faillog_t
+ /var/log/faillog	--	system_u:object_r:faillog_t
+ /var/log/ksyms.*	--	system_u:object_r:var_log_ksyms_t
++/var/log/dmesg		--	system_u:object_r:dmesg_log_t
+ /var/log/lastlog	--	system_u:object_r:lastlog_t
+ /var/log/ksymoops(/.*)?		system_u:object_r:var_log_ksyms_t
+ /var/log/syslog		--	system_u:object_r:var_log_t
+diff -Nur policy-1.6/genfs_contexts policy-1.6-dwalsh/genfs_contexts
+--- policy-1.6/genfs_contexts	Mon Feb  2 15:42:41 2004
++++ policy-1.6-dwalsh/genfs_contexts	Sat Feb 21 13:42:05 2004
+@@ -45,6 +45,7 @@
+ genfscon proc /sys/vm			system_u:object_r:sysctl_vm_t
+ genfscon proc /sys/dev			system_u:object_r:sysctl_dev_t
+ genfscon proc /net/rpc			system_u:object_r:sysctl_rpc_t
++genfscon proc /irq			system_u:object_r:sysctl_irq_t
+ 
+ # rootfs
+ genfscon rootfs /			system_u:object_r:root_t
+diff -Nur policy-1.6/macros/program/apache_macros.te policy-1.6-dwalsh/macros/program/apache_macros.te
+--- policy-1.6/macros/program/apache_macros.te	Wed Feb 11 19:34:46 2004
++++ policy-1.6-dwalsh/macros/program/apache_macros.te	Sat Feb 21 13:42:05 2004
+@@ -12,7 +12,11 @@
+ # Type that CGI scripts run as
+ #
+ #daemon_sub_domain(httpd_t, httpd_$1_script)
++ifdef(`single_userdomain', `
++typealias $1_t alias httpd_$1_script_t;
++', `
+ type httpd_$1_script_t, domain, privmail;
++')
+ type httpd_$1_script_exec_t, file_type, sysadmfile;
+ 
+ role system_r types httpd_$1_script_t;
+diff -Nur policy-1.6/macros/program/gpg_macros.te policy-1.6-dwalsh/macros/program/gpg_macros.te
+--- policy-1.6/macros/program/gpg_macros.te	Mon Feb  2 15:42:47 2004
++++ policy-1.6-dwalsh/macros/program/gpg_macros.te	Sat Feb 21 13:42:05 2004
+@@ -17,8 +17,15 @@
+ # provided separately in domains/program/gpg.te.
+ #
+ define(`gpg_domain', `
+-# Derived domain based on the calling user domain and the program.
++ifdef(`single_userdomain', `
++typealias $1_t alias $1_gpg_t;
++typealias $1_home_t alias $1_gpg_secret_t;
++# if we have a single user domain then gpg needs SETUID access...
++allow $1_t self:capability { setuid };
++', `
+ type $1_gpg_t, domain, privlog;
++type $1_gpg_secret_t, file_type, sysadmfile;
++')
+ # Transition from the user domain to the derived domain.
+ domain_auto_trans($1_t, gpg_exec_t, $1_gpg_t)
+ 
+@@ -30,8 +37,6 @@
+ # The user role is authorized for this domain.
+ role $1_r types $1_gpg_t;
+ 
+-type $1_gpg_secret_t, file_type, sysadmfile;
+-
+ allow $1_t $1_gpg_secret_t:file getattr;
+ 
+ allow $1_gpg_t device_t:dir r_dir_perms;
+diff -Nur policy-1.6/macros/program/irc_macros.te policy-1.6-dwalsh/macros/program/irc_macros.te
+--- policy-1.6/macros/program/irc_macros.te	Thu Feb  5 21:09:57 2004
++++ policy-1.6-dwalsh/macros/program/irc_macros.te	Sat Feb 21 13:42:05 2004
+@@ -19,8 +19,13 @@
+ ifdef(`irc.te', `
+ define(`irc_domain',`
+ # Derived domain based on the calling user domain and the program.
++ifdef(`single_userdomain', `
++typealias $1_t alias $1_irc_t;
++typealias $1_home_t alias $1_home_irc_t;
++', `
+ type $1_irc_t, domain;
+ type $1_home_irc_t, file_type, sysadmfile;
++')
+ type $1_irc_exec_t, file_type, sysadmfile;
+ 
+ ifdef(`slocate.te', `
+diff -Nur policy-1.6/macros/program/lpr_macros.te policy-1.6-dwalsh/macros/program/lpr_macros.te
+--- policy-1.6/macros/program/lpr_macros.te	Sat Sep 27 21:18:25 2003
++++ policy-1.6-dwalsh/macros/program/lpr_macros.te	Sat Feb 21 13:42:05 2004
+@@ -18,7 +18,11 @@
+ undefine(`lpr_domain')
+ define(`lpr_domain',`
+ # Derived domain based on the calling user domain and the program
++ifdef(`single_userdomain', `
++typealias $1_t alias $1_lpr_t;
++', `
+ type $1_lpr_t, domain, privlog;
++')
+ 
+ # Transition from the user domain to the derived domain.
+ domain_auto_trans($1_t, lpr_exec_t, $1_lpr_t)
+diff -Nur policy-1.6/macros/program/mozilla_macros.te policy-1.6-dwalsh/macros/program/mozilla_macros.te
+--- policy-1.6/macros/program/mozilla_macros.te	Tue Feb 17 19:36:52 2004
++++ policy-1.6-dwalsh/macros/program/mozilla_macros.te	Sat Feb 21 13:42:05 2004
+@@ -36,13 +36,11 @@
+ can_unix_connect($1_t, $1_mozilla_t)
+ 
+ ifdef(`nfs_home_dirs', `
++create_dir_file($1_mozilla_t, nfs_t)
++')dnl end if nfs_home_dirs
+ ifdef(`automount.te', `
+ allow $1_mozilla_t autofs_t:dir { search getattr };
+ ')
+-ifdef(`writehome', `
+-create_dir_file($1_mozilla_t, nfs_t)
+-')dnl end if writehome
+-')dnl end if nfs_home_dirs
+ 
+ # for bash
+ allow $1_mozilla_t device_t:dir { getattr read };
+@@ -76,8 +74,13 @@
+ ifdef(`readhome', `
+ r_dir_file($1_mozilla_t, $1_home_t)
+ r_dir_file($1_mozilla_t, $1_home_dir_t)
++
++ifdef(`gpg.te', `
+ dontaudit $1_mozilla_t $1_gpg_secret_t:dir { getattr };
++')
++ifdef(`screen.te', `
+ dontaudit $1_mozilla_t $1_home_screen_t:file { getattr };
++')
+ dontaudit $1_mozilla_t $1_home_ssh_t:dir { getattr };
+ file_type_auto_trans($1_mozilla_t, $1_home_dir_t, $1_mozilla_rw_t)
+ ifdef(`writehome', `
+diff -Nur policy-1.6/macros/program/screen_macros.te policy-1.6-dwalsh/macros/program/screen_macros.te
+--- policy-1.6/macros/program/screen_macros.te	Tue Feb 17 19:36:52 2004
++++ policy-1.6-dwalsh/macros/program/screen_macros.te	Sat Feb 21 13:42:05 2004
+@@ -21,8 +21,13 @@
+ ifdef(`screen.te', `
+ define(`screen_domain',`
+ # Derived domain based on the calling user domain and the program.
++ifdef(`single_userdomain', `
++typealias $1_t alias $1_screen_t;
++type $1_home_t $1_home_screen_t;
++', `
+ type $1_screen_t, domain, privlog, privfd;
+ type $1_home_screen_t, file_type, sysadmfile;
++')
+ 
+ # Transition from the user domain to this domain.
+ domain_auto_trans($1_t, screen_exec_t, $1_screen_t)
+diff -Nur policy-1.6/macros/program/ssh_macros.te policy-1.6-dwalsh/macros/program/ssh_macros.te
+--- policy-1.6/macros/program/ssh_macros.te	Tue Feb 17 19:36:52 2004
++++ policy-1.6-dwalsh/macros/program/ssh_macros.te	Sat Feb 21 13:42:05 2004
+@@ -21,8 +21,13 @@
+ ifdef(`ssh.te',
+ `
+ define(`ssh_domain',`
+-# Derived domain based on the calling user domain and the program.
++ifdef(`single_userdomain', `
++typealias $1_t alias $1_ssh_t;
++typealias $1_home_t alias $1_home_ssh_t;
++', `
+ type $1_ssh_t, domain, privlog;
++type $1_home_ssh_t, file_type, sysadmfile;
++')
+ 
+ # Transition from the user domain to the derived domain.
+ domain_auto_trans($1_t, ssh_exec_t, $1_ssh_t)
+@@ -104,7 +109,6 @@
+ allow $1_ssh_t $1_t:unix_stream_socket rw_socket_perms;
+ 
+ # Access the users .ssh directory.
+-type $1_home_ssh_t, file_type, sysadmfile;
+ file_type_auto_trans({ sysadm_ssh_t $1_ssh_t }, $1_home_dir_t, $1_home_ssh_t)
+ allow { sysadm_ssh_t $1_ssh_t } $1_home_ssh_t:lnk_file { getattr read };
+ dontaudit $1_ssh_t $1_home_t:dir search;
+diff -Nur policy-1.6/macros/program/x_client_macros.te policy-1.6-dwalsh/macros/program/x_client_macros.te
+--- policy-1.6/macros/program/x_client_macros.te	Tue Feb 17 19:36:52 2004
++++ policy-1.6-dwalsh/macros/program/x_client_macros.te	Sat Feb 21 13:42:05 2004
+@@ -23,7 +23,17 @@
+ #
+ define(`x_client_domain',`
+ # Derived domain based on the calling user domain and the program.
++ifdef(`single_userdomain', `
++typealias $1_t alias $1_$2_t;
++typealias $1_home_t alias $1_$2_rw_t;
++typealias $1_home_t alias $1_$2_ro_t;
++', `
+ type $1_$2_t, domain $3;
++# Type for files that are writeable by this domain.
++type $1_$2_rw_t, file_type, sysadmfile, tmpfile;
++# Type for files that are read-only for this domain
++type $1_$2_ro_t, file_type, sysadmfile;
++')
+ 
+ # Transition from the user domain to the derived domain.
+ domain_auto_trans($1_t, $2_exec_t, $1_$2_t)
+@@ -51,9 +61,6 @@
+ allow $1_$2_t sysctl_kernel_t:dir search;
+ allow $1_$2_t sysctl_kernel_t:file { getattr read };
+ 
+-# Type for files that are writeable by this domain.
+-type $1_$2_rw_t, file_type, sysadmfile, tmpfile;
+-
+ ifdef(`xauth.te',`
+ allow $1_$2_t $1_home_xauth_t:file { getattr read };
+ ')
+@@ -66,8 +73,6 @@
+ allow $1_t $1_$2_rw_t:dir create_dir_perms;
+ allow $1_t $1_$2_rw_t:{ file lnk_file } create_file_perms;
+ 
+-# Type for files that are read-only for this domain
+-type $1_$2_ro_t, file_type, sysadmfile;
+ r_dir_file($1_$2_t, $1_$2_ro_t)
+ allow $1_$2_t $1_$2_ro_t:fifo_file { read write };
+ create_dir_file($1_t, $1_$2_ro_t)
+diff -Nur policy-1.6/macros/program/xauth_macros.te policy-1.6-dwalsh/macros/program/xauth_macros.te
+--- policy-1.6/macros/program/xauth_macros.te	Tue Feb 17 19:36:52 2004
++++ policy-1.6-dwalsh/macros/program/xauth_macros.te	Sat Feb 21 13:42:05 2004
+@@ -19,8 +19,13 @@
+ ifdef(`xauth.te', `
+ define(`xauth_domain',`
+ # Derived domain based on the calling user domain and the program.
++ifdef(`single_userdomain', `
++typealias $1_t alias $1_xauth_t;
++typealias $1_home_t alias $1_home_xauth_t;
++', `
+ type $1_xauth_t, domain;
+ type $1_home_xauth_t, file_type, sysadmfile;
++')
+ 
+ ifdef(`slocate.te', `
+ allow $1_locate_t $1_home_xauth_t:file { getattr read };
+diff -Nur policy-1.6/macros/program/ypbind_macros.te policy-1.6-dwalsh/macros/program/ypbind_macros.te
+--- policy-1.6/macros/program/ypbind_macros.te	Tue Feb 17 19:36:52 2004
++++ policy-1.6-dwalsh/macros/program/ypbind_macros.te	Sat Feb 21 13:42:05 2004
+@@ -1,15 +1,14 @@
+-undefine(`can_ypbind')
++define(`can_ypbind',`')
++
+ ifdef(`ypbind.te', `
++ifdef(`allow_ypbind', `
++undefine(`can_ypbind')
+ define(`can_ypbind', `
+ r_dir_file($1,var_yp_t)
+ can_network($1)
+ allow $1 port_t:{ tcp_socket udp_socket } name_bind;
+ allow $1 resolv_conf_t:file { getattr read };
+ allow $1 $1:capability { net_bind_service };
+-')
+-
+-', `
+-
+-define(`can_ypbind',`')
+-
+-')
++') dnl can_ypbind
++') dnl allow_ypbind
++') dnl ypbind.te
+diff -Nur policy-1.6/macros/user_macros.te policy-1.6-dwalsh/macros/user_macros.te
+--- policy-1.6/macros/user_macros.te	Tue Feb 17 19:36:52 2004
++++ policy-1.6-dwalsh/macros/user_macros.te	Sat Feb 21 13:42:05 2004
+@@ -62,13 +62,14 @@
+ undefine(`user_domain')
+ define(`user_domain',`
+ # Use capabilities
+-ifdef(`single_userdomain', `
+-# if we have a single user domain then gpg needs SETUID access...
+-allow $1_t self:capability { setuid };
+-')dnl end single_userdomain
+ allow $1_t self:capability { setgid chown fowner };
+ dontaudit $1_t self:capability { sys_nice fsetid };
+ 
++#
++# kdeinit wants this access
++#
++allow $1_t dri_device_t:dir { getattr };
++
+ # Type for home directory.
+ type $1_home_dir_t, file_type, sysadmfile, home_dir_type, home_type ifelse($1, sysadm, `', `, user_home_dir_type, user_home_type');
+ type $1_home_t, file_type, sysadmfile, home_type ifelse($1, sysadm, `', `, user_home_type');
+@@ -156,6 +157,14 @@
+ allow $1_t mail_spool_t:lnk_file read;
+ 
+ #
++# Allow graphical boot to check battery lifespan
++#
++ifdef(`apmd.te', `
++allow $1_t apmd_t:unix_stream_socket { connectto };
++allow $1_t apmd_var_run_t:sock_file { write };
++')
++
++#
+ # Allow the query of filesystem quotas
+ #
+ allow $1_t fs_type:filesystem quotaget;
+@@ -180,7 +189,6 @@
+ ifdef(`mta.te', `mail_domain($1)')
+ ifdef(`crontab.te', `crontab_domain($1)')
+ 
+-ifdef(`single_userdomain', `', `
+ ifdef(`screen.te', `screen_domain($1)')
+ ifdef(`mozilla.te', `mozilla_domain($1)')
+ ifdef(`games.te', `
+@@ -204,7 +212,6 @@
+ ifdef(`apache.te', `apache_domain($1)')
+ ifdef(`slocate.te', `locate_domain($1)')
+ ')dnl end ifelse sysadm
+-')dnl end of multiple userdomain policy
+ 
+ # Instantiate a derived domain for user cron jobs.
+ ifdef(`crond.te', `crond_domain($1)')
+@@ -214,8 +221,10 @@
+ file_type_auto_trans(vmware_user_t, $1_home_dir_t, vmware_user_file_t)
+ ')
+ 
++ifdef(`allow_user_direct_mouse', `
+ # Read the mouse.
+ allow $1_t mouse_device_t:chr_file r_file_perms;
++')
+ # Access other miscellaneous devices.
+ allow $1_t misc_device_t:file_class_set rw_file_perms;
+ allow $1_t device_t:lnk_file { getattr read };
+@@ -305,10 +314,8 @@
+ allow xdm_xserver_t $1_tmpfs_t:file { read write };
+ 
+ allow $1_t var_lib_xkb_t:dir search;
++allow $1_t var_lib_xkb_t:file { getattr read };
+ 
+-ifdef(`single_userdomain', `
+-file_type_auto_trans(xdm_t, $1_home_dir_t, $1_home_t, file)
+-', `
+ ifdef(`xauth.te', `
+ ifelse(`$1', sysadm, `', `
+ file_type_auto_trans(xdm_t, $1_home_dir_t, $1_home_xauth_t, file)
+@@ -317,7 +324,6 @@
+ 
+ allow xdm_t $1_home_t:lnk_file read;
+ allow xdm_t $1_home_t:dir search;
+-')dnl end else single_userdomain
+ ')dnl end ifdef xdm.te
+ 
+ # Access the sound device.
+@@ -408,11 +414,6 @@
+ allow $1_t man_t:dir r_dir_perms;
+ allow $1_t man_t:notdevfile_class_set r_file_perms;
+ 
+-ifdef(`apmd.te', `
+-allow $1_t apmd_t:unix_stream_socket { connectto };
+-allow $1_t apmd_var_run_t:sock_file { write };
+-')
+-
+ # Read /dev directories and any symbolic links.
+ allow $1_t device_t:dir r_dir_perms;
+ allow $1_t device_t:lnk_file r_file_perms;
+@@ -446,4 +447,3 @@
+ role user_r types $1;
+ role staff_r types $1;
+ ')
+-
+diff -Nur policy-1.6/net_contexts policy-1.6-dwalsh/net_contexts
+--- policy-1.6/net_contexts	Mon Feb  2 15:42:41 2004
++++ policy-1.6-dwalsh/net_contexts	Sat Feb 21 13:42:05 2004
+@@ -31,6 +31,10 @@
+ portcon tcp 113 system_u:object_r:inetd_port_t
+ portcon udp 512 system_u:object_r:biff_port_t
+ portcon udp 517 system_u:object_r:inetd_port_t
++portcon tcp 891 system_u:object_r:inetd_port_t
++portcon udp 891 system_u:object_r:inetd_port_t
++portcon tcp 892 system_u:object_r:inetd_port_t
++portcon udp 892 system_u:object_r:inetd_port_t
+ portcon tcp 901 system_u:object_r:biff_port_t
+ ')
+ ifdef(`courier.te', `define(`use_pop')')
+@@ -123,9 +127,6 @@
+ portcon tcp 5269 system_u:object_r:jabber_interserver_port_t
+ ')
+ ifdef(`postgresql.te', `portcon tcp 5432 system_u:object_r:postgresql_port_t')
+-ifdef(`xdm.te', `define(`use_x_ports')')
+-ifdef(`startx.te', `define(`use_x_ports')')
+-ifdef(`xauth.te', `define(`use_x_ports')')
+ ifdef(`use_x_ports', `
+ portcon tcp 6000  system_u:object_r:xserver_port_t
+ portcon tcp 6001  system_u:object_r:xserver_port_t
+diff -Nur policy-1.6/tunable.te policy-1.6-dwalsh/tunable.te
+--- policy-1.6/tunable.te	Fri Feb 13 19:53:29 2004
++++ policy-1.6-dwalsh/tunable.te	Sat Feb 21 13:42:05 2004
+@@ -4,6 +4,10 @@
+ # uncomment to allow mozilla to write files in the user home directory
+ dnl define(`writehome')
+ 
++# uncomment to allow staff_r users to search the sysadm home dir and read
++# files (such as ~/.bashrc)
++dnl define(`staff_read_sysadm_file')
++
+ # uncomment to allow sysadm_t to do almost everything
+ dnl define(`unrestricted_admin')
+ 
+@@ -26,6 +30,9 @@
+ # to allow ftp to read/write files in the user home directories
+ dnl define(`ftp_home_dir')
+ 
++# to allow ftp to run as a daemon rather than in inetd
++dnl define(`ftpd_daemon')
++
+ # uncomment to allow sysadm_t to directly start daemons
+ define(`direct_sysadm_daemon')
+ 
+@@ -34,3 +41,9 @@
+ 
+ # uncomment to support NFS home directories
+ dnl define(`nfs_home_dirs')
++
++# uncomment to allow regular users direct mouse access
++dnl define(`allow_user_direct_mouse')
++
++# uncomment to allow ypbind to run with NIS
++dnl define(`allow_ypbind')
+diff -Nur policy-1.6/types/procfs.te policy-1.6-dwalsh/types/procfs.te
+--- policy-1.6/types/procfs.te	Mon Feb  2 15:42:48 2004
++++ policy-1.6-dwalsh/types/procfs.te	Sat Feb 21 13:42:05 2004
+@@ -41,5 +41,6 @@
+ type sysctl_vm_t, sysctl_type;
+ type sysctl_dev_t, sysctl_type;
+ type sysctl_rpc_t, sysctl_type;
++type sysctl_irq_t, sysctl_type;
+ 
+ 

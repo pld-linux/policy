@@ -1,0 +1,2204 @@
+--- policy-1.6/tunable.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/tunable.te	2004-02-21 08:26:25.214343486 -0500
+@@ -1,19 +1,18 @@
+ # uncomment to allow mozilla to read files in the user home directory
+-dnl define(`readhome')
++define(`readhome')
+ 
+ # uncomment to allow mozilla to write files in the user home directory
+-dnl define(`writehome')
++define(`writehome')
+ 
+ # uncomment to allow staff_r users to search the sysadm home dir and read
+ # files (such as ~/.bashrc)
+ dnl define(`staff_read_sysadm_file')
+ 
+ # uncomment to allow sysadm_t to do almost everything
+-dnl define(`unrestricted_admin')
++define(`unrestricted_admin')
+ 
+ # uncomment to make everything other than newrole and su run by a userdomain
+ # stay in the same userdomain
+-# - not presently supported in the NSA policy
+ dnl define(`single_userdomain')
+ 
+ # uncomment to allow ssh logins as sysadm_r:sysadm_t
+@@ -22,10 +21,10 @@
+ # to allow users to run TCP servers (bind to ports and accept connection from
+ # the same domain and outside users)  disabling this forces FTP passive mode
+ # and may change other protocols (including IRC if single_userdomain is defined)
+-dnl define(`allow_user_tcp_server')
++define(`allow_user_tcp_server')
+ 
+ # to allow users to run the dmesg command
+-dnl define(`allow_user_dmesg')
++define(`allow_user_dmesg')
+ 
+ # to allow ftp to read/write files in the user home directories
+ dnl define(`ftp_home_dir')
+@@ -36,14 +35,15 @@
+ # uncomment to allow sysadm_t to directly start daemons
+ define(`direct_sysadm_daemon')
+ 
+-# uncomment if you use nscd and want to allow all domains to access it
+-dnl define(`nscd_all_connect')
++# comment if you use nscd and do not want to allow all domains to access it
++define(`nscd_all_connect')
+ 
+ # uncomment to support NFS home directories
+-dnl define(`nfs_home_dirs')
++define(`nfs_home_dirs')
+ 
+-# uncomment to allow regular users direct mouse access
+-dnl define(`allow_user_direct_mouse')
++# comment to deny regular users direct mouse access (only allow the X server)
++define(`allow_user_direct_mouse')
++
++# to allow ypbind to run with NIS
++define(`allow_ypbind')
+ 
+-# uncomment to allow ypbind to run with NIS
+-dnl define(`allow_ypbind')
+--- policy-1.6/macros/user_macros.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/macros/user_macros.te	2004-02-21 08:26:24.476427628 -0500
+@@ -306,6 +306,7 @@
+ can_unix_connect($1_t, xdm_t)
+ allow $1_t xdm_tmp_t:sock_file rw_file_perms;
+ allow $1_t xdm_tmp_t:dir r_dir_perms;
++allow $1_t xdm_tmp_t:file { read };
+ allow $1_t xdm_xserver_tmp_t:sock_file { read write };
+ allow $1_t xdm_xserver_tmp_t:dir search;
+ allow $1_t xdm_xserver_t:unix_stream_socket connectto;
+@@ -440,6 +441,12 @@
+ 
+ # stop warnings about "ls -l" on directories with unlabelled files
+ dontaudit $1_t file_t:{ dir file lnk_file } getattr;
++#
++# Rules used to associate a homedir as a mountpoint
++#
++allow $1_home_t $1_home_t:filesystem associate;
++allow $1_mozilla_rw_t $1_home_t:filesystem associate;
++
+ ')
+ 
+ undefine(`in_user_role')
+--- /dev/null	2004-01-21 11:12:15.000000000 -0500
++++ policy-1.6/macros/program/uml_macros.te	2004-02-21 08:26:24.478427400 -0500
+@@ -0,0 +1,145 @@
++#
++# Macros for uml domains.
++#
++
++#
++# Author:  Russell Coker <russell@coker.com.au>
++#
++
++#
++# uml_domain(domain_prefix)
++#
++# Define a derived domain for the uml program when executed
++# by a user domain.
++#
++# The type declaration for the executable type for this program is
++# provided separately in domains/program/uml.te. 
++#
++undefine(`uml_domain')
++ifdef(`uml.te', `
++define(`uml_domain',`
++
++# Derived domain based on the calling user domain and the program.
++ifdef(`single_userdomain', `
++typealias $1_t alias $1_uml_t;
++typealias $1_home_t alias $1_uml_exec_t;
++typealias $1_home_t alias $1_uml_ro_t;
++typealias $1_home_t alias $1_uml_rw_t;
++', `
++type $1_uml_t, domain;
++type $1_uml_exec_t, file_type, sysadmfile;
++type $1_uml_ro_t, file_type, sysadmfile;
++type $1_uml_rw_t, file_type, sysadmfile;
++')
++
++ifdef(`slocate.te', `
++allow $1_locate_t { $1_uml_exec_t $1_uml_ro_t $1_uml_rw_t }:dir { getattr search };
++allow $1_locate_t { $1_uml_exec_t $1_uml_ro_t $1_uml_rw_t }:file { getattr read };
++')
++
++can_ptrace($1_t, $1_uml_t)
++
++# for X
++ifdef(`xserver.te', `
++allow $1_uml_t xdm_xserver_tmp_t:dir search;
++allow $1_uml_t $1_xserver_tmp_t:sock_file { write };
++can_unix_connect($1_uml_t, $1_xserver_t)
++')
++
++allow $1_t { $1_uml_ro_t $1_uml_rw_t $1_uml_exec_t }:file_class_set { relabelfrom relabelto create_file_perms };
++allow $1_t { $1_uml_ro_t $1_uml_rw_t $1_uml_exec_t }:dir { relabelfrom relabelto create_dir_perms };
++r_dir_file($1_t, uml_ro_t)
++
++# Transition from the user domain to this domain.
++domain_auto_trans($1_t, { uml_exec_t $1_uml_exec_t }, $1_uml_t)
++can_exec($1_uml_t, { uml_exec_t $1_uml_exec_t })
++
++# The user role is authorized for this domain.
++role $1_r types $1_uml_t;
++
++# Inherit and use descriptors from gnome-pty-helper.
++ifdef(`gnome-pty-helper.te', `allow $1_uml_t $1_gph_t:fd use;')
++
++# Inherit and use descriptors from newrole.
++ifdef(`newrole.te', `allow $1_uml_t newrole_t:fd use;')
++
++# allow ps to show uml
++allow $1_t $1_uml_t:dir { search getattr read };
++allow $1_t $1_uml_t:{ file lnk_file } { read getattr };
++allow $1_t $1_uml_t:process signal_perms;
++
++# allow the UML thing to happen
++allow $1_uml_t self:process { fork signal_perms ptrace };
++can_create_pty($1_uml)
++allow $1_uml_t root_t:dir search;
++tmp_domain($1_uml)
++can_exec($1_uml_t, $1_uml_tmp_t)
++tmpfs_domain($1_uml)
++can_exec($1_uml_t, $1_uml_tmpfs_t)
++create_dir_file($1_t, $1_uml_tmp_t)
++allow $1_t $1_uml_tmp_t:sock_file create_file_perms;
++allow $1_uml_t self:fifo_file rw_file_perms;
++allow $1_uml_t fs_t:filesystem getattr;
++
++allow $1_uml_t tun_tap_device_t:chr_file { read write ioctl };
++
++ifdef(`uml_net.te', `
++# for uml_net
++domain_auto_trans($1_uml_t, uml_net_exec_t, uml_net_t)
++allow uml_net_t $1_uml_t:unix_stream_socket { read write };
++allow uml_net_t $1_uml_t:unix_dgram_socket { read write };
++dontaudit uml_net_t privfd:fd use;
++allow uml_net_t $1_uml_devpts_t:chr_file { read write };
++dontaudit uml_net_t $1_uml_rw_t:dir { getattr search };
++')
++
++# for mconsole
++allow { $1_t $1_uml_t } $1_uml_t:unix_dgram_socket sendto;
++allow $1_uml_t $1_t:unix_dgram_socket sendto;
++
++# Use the network.
++can_network($1_uml_t)
++
++# for xterm
++uses_shlib($1_uml_t)
++can_exec($1_uml_t, { bin_t sbin_t lib_t })
++allow $1_uml_t { bin_t sbin_t }:dir search;
++allow $1_uml_t etc_t:file { getattr read };
++dontaudit $1_uml_t { etc_runtime_t resolv_conf_t }:file read;
++can_tcp_connect($1_uml_t, sshd_t)
++ifdef(`xauth.te', `
++allow $1_uml_t $1_home_xauth_t:file { getattr read };
++')
++allow $1_uml_t var_run_t:dir search;
++allow $1_uml_t initrc_var_run_t:file { getattr read };
++dontaudit $1_uml_t initrc_var_run_t:file { write lock };
++
++allow $1_uml_t device_t:dir search;
++allow $1_uml_t devtty_t:chr_file rw_file_perms;
++allow $1_uml_t self:unix_stream_socket create_stream_socket_perms;
++allow $1_uml_t self:unix_dgram_socket create_socket_perms;
++allow $1_uml_t privfd:fd use;
++allow $1_uml_t proc_t:dir search;
++allow $1_uml_t proc_t:file { getattr read };
++
++# for SKAS - need something better
++allow $1_uml_t proc_t:file write;
++
++# Write to the user domain tty.
++allow $1_uml_t $1_tty_device_t:chr_file rw_file_perms;
++allow $1_uml_t $1_devpts_t:chr_file rw_file_perms;
++
++# access config files
++allow $1_uml_t home_root_t:dir search;
++file_type_auto_trans($1_uml_t, $1_home_dir_t, $1_uml_rw_t)
++r_dir_file($1_uml_t, { $1_uml_ro_t uml_ro_t })
++
++# putting uml data under /var is usual...
++allow $1_uml_t var_t:dir search;
++')
++
++', `
++
++define(`uml_domain',`')
++
++')
+--- policy-1.6/macros/program/newrole_macros.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/macros/program/newrole_macros.te	2004-02-21 08:26:24.477427514 -0500
+@@ -37,6 +37,11 @@
+ allow $1_t bin_t:lnk_file read;
+ allow $1_t shell_exec_t:file r_file_perms;
+ 
++can_ypbind($1_t)
++dontaudit $1_t krb5_conf_t:file { write };
++allow $1_t krb5_conf_t:file { getattr read };
++allow $1_t urandom_device_t:chr_file { getattr read };
++
+ # Allow $1_t to transition to user domains.
+ domain_trans($1_t, shell_exec_t, userdomain)
+ can_setexec($1_t)
+--- policy-1.6/macros/program/ssh_macros.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/macros/program/ssh_macros.te	2004-02-21 08:26:24.521422497 -0500
+@@ -184,10 +184,24 @@
+ allow $1_ssh_agent_t $1_tty_device_t:chr_file rw_file_perms;
+ allow $1_ssh_agent_t $1_devpts_t:chr_file rw_file_perms;
+ 
++ifdef(`xdm.te', `
++allow $1_ssh_agent_t xdm_t:process sigchld;
++')
++
+ # Allow the user shell to signal the ssh program.
+ allow $1_t $1_ssh_agent_t:process signal;
+ # allow ps to show ssh
+ can_ps($1_t, $1_ssh_agent_t)
++dontaudit $1_ssh_agent_t proc_t:dir { search };
++
++can_ypbind($1_ssh_agent_t)
++ifdef(`nfs_home_dirs', `
++ifdef(`automount.te', `
++allow $1_ssh_agent_t autofs_t:dir { search getattr };
++')
++rw_dir_create_file($1_ssh_agent_t, nfs_t)
++can_exec($1_ssh_agent_t, nfs_t)
++')dnl end nfs_home_dirs
+ 
+ uses_shlib($1_ssh_agent_t)
+ read_locale($1_ssh_agent_t)
+--- policy-1.6/domains/admin.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/domains/admin.te	2004-02-21 08:26:24.522422383 -0500
+@@ -33,4 +33,4 @@
+ 
+ define(`admin_tty_type', `{ sysadm_tty_device_t sysadm_devpts_t }')
+ 
+-
++domain_auto_trans(sysadm_t, dmesg_exec_t, dmesg_t)
+--- policy-1.6/domains/program/tmpreaper.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/domains/program/tmpreaper.te	2004-02-21 08:26:24.528421699 -0500
+@@ -35,3 +35,5 @@
+ allow tmpreaper_t catman_t:dir setattr;
+ ')
+ read_locale(tmpreaper_t)
++allow tmpreaper_t var_spool_t:dir { search };
++
+--- policy-1.6/domains/program/dmesg.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/domains/program/dmesg.te	2004-02-21 08:26:24.629410184 -0500
+@@ -1,4 +1,4 @@
+-#DESC dmesg - control kernel ring buffer
++#DESC dmesg - - print or control the kernel ring buffer
+ #
+ # Author:  Dan Walsh dwalsh@redhat.com
+ #
+--- policy-1.6/domains/program/mount.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/domains/program/mount.te	2004-02-21 08:26:24.526421927 -0500
+@@ -68,3 +68,9 @@
+ ifdef(`automount.te', `
+ allow mount_t autofs_t:dir { read };
+ ')
++allow mount_t fs_t:filesystem { relabelfrom };
++#
++# This rule needs to be generalized.  Only admin, initrc should have it.
++#
++allow mount_t file_type:filesystem { unmount mount relabelto };
++
+--- policy-1.6/domains/program/ssh.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/domains/program/ssh.te	2004-02-21 08:26:24.523422269 -0500
+@@ -73,8 +73,8 @@
+ ifdef(`automount.te', `
+ allow $1_t autofs_t:dir { search getattr };
+ ')
+-allow $1_t nfs_t:dir { search getattr };
+-allow $1_t nfs_t:file { getattr read };
++allow $1_t nfs_t:dir rw_dir_perms;
++allow $1_t nfs_t:file rw_file_perms;
+ ')dnl end if nfs_home_dirs
+ 
+ ifdef(`single_userdomain', `
+@@ -215,6 +215,7 @@
+ dontaudit sshd_t krb5_conf_t:file { write };
+ allow sshd_t krb5_conf_t:file { getattr read };
+ 
++file_type_auto_trans(sshd_t, etc_t, sshd_key_t, file)
+ # Type for the ssh executable.
+ type ssh_exec_t, file_type, exec_type, sysadmfile;
+ 
+--- policy-1.6/domains/program/netutils.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/domains/program/netutils.te	2004-02-21 08:26:24.527421813 -0500
+@@ -16,6 +16,7 @@
+ 
+ uses_shlib(netutils_t)
+ can_network(netutils_t)
++can_ypbind(netutils_t)
+ 
+ domain_auto_trans(initrc_t, netutils_exec_t, netutils_t)
+ domain_auto_trans(sysadm_t, netutils_exec_t, netutils_t)
+--- policy-1.6/domains/program/unused/squid.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/domains/program/unused/squid.te	2004-02-21 08:26:24.591414516 -0500
+@@ -59,6 +59,7 @@
+ 
+ # Use the network
+ can_network(squid_t)
++can_ypbind(squid_t)
+ can_tcp_connect(web_client_domain, squid_t)
+ 
+ # tcp port 8080 and udp port 3130 is http_cache_port_t (see net_contexts)
+--- policy-1.6/domains/program/unused/consoletype.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/domains/program/unused/consoletype.te	2004-02-21 08:26:24.588414859 -0500
+@@ -40,3 +40,6 @@
+ allow consoletype_t console_device_t:chr_file { getattr ioctl read write };
+ allow consoletype_t initrc_t:fifo_file write;
+ allow consoletype_t tty_device_t:chr_file read;
++allow consoletype_t nfs_t:file { write };
++allow consoletype_t xdm_tmp_t:file { read write };
++allow consoletype_t pam_var_run_t:file { getattr read };
+--- policy-1.6/domains/program/unused/xdm.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/domains/program/unused/xdm.te	2004-02-21 08:26:24.601413376 -0500
+@@ -35,13 +35,15 @@
+ # handle of a file inside the dir!!!
+ allow xdm_xserver_t xdm_var_lib_t:file { getattr read };
+ dontaudit xdm_xserver_t xdm_var_lib_t:dir search;
++allow xdm_xserver_t xdm_var_run_t:file { getattr read };
+ type xsession_exec_t, file_type, sysadmfile, exec_type;
+ type etc_xdm_t, file_type, sysadmfile;
+ 
+ allow xdm_t default_context_t:file { read getattr };
+ 
+ can_network(xdm_t)
+-allow xdm_t self:unix_stream_socket create_stream_socket_perms;
++can_ypbind(xdm_t)
++allow xdm_t self:unix_stream_socket { connectto create_stream_socket_perms };
+ allow xdm_t self:unix_dgram_socket create_socket_perms;
+ allow xdm_t self:fifo_file rw_file_perms;
+ 
+@@ -199,6 +201,13 @@
+ 
+ # Run the X server in a derived domain.
+ xserver_domain(xdm)
++
++ifdef(`rhgb.te', `
++allow xdm_xserver_t ramfs_t:dir rw_dir_perms;
++allow xdm_xserver_t ramfs_t:file create_file_perms;
++allow rhgb_t xdm_xserver_t:process signal;
++')
++
+ # Unrestricted inheritance.
+ allow xdm_t xdm_xserver_t:process { noatsecure siginh rlimitinh };
+ 
+@@ -233,8 +242,9 @@
+ ifdef(`automount.te', `
+ allow { xdm_t xdm_xserver_t } autofs_t:dir { search getattr };
+ ')
+-allow { xdm_t xdm_xserver_t } nfs_t:dir { search getattr };
+-allow { xdm_t xdm_xserver_t } nfs_t:file { getattr read };
++allow xdm_t nfs_t:dir create_dir_perms;
++allow xdm_t nfs_t:{file lnk_file} create_file_perms;
++can_exec(xdm_t, nfs_t)
+ ')dnl end if nfs_home_dirs
+ 
+ # for .dmrc
+@@ -251,5 +261,12 @@
+ #
+ ifdef(`pam.te', `
+ dontaudit pam_t xdm_t:fd { use };
++allow xdm_t pam_var_run_t:dir create_dir_perms;
++allow xdm_t pam_var_run_t:file create_file_perms;
+ ')
+ 
++allow xdm_t var_log_t:file { read };
++dontaudit xdm_t krb5_conf_t:file { write };
++allow xdm_t krb5_conf_t:file { getattr read };
++allow xdm_t xdm_t:capability { sys_nice sys_rawio };
++allow xdm_t xdm_t:process { setrlimit };
+--- policy-1.6/domains/program/unused/ping.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/domains/program/unused/ping.te	2004-02-21 08:26:24.529421585 -0500
+@@ -17,14 +17,14 @@
+ in_user_role(ping_t)
+ type ping_exec_t, file_type, sysadmfile, exec_type;
+ 
+-bool user_ping false;
++#bool user_ping false;
+ 
+-if (user_ping) {
+-	domain_auto_trans(unpriv_userdomain, ping_exec_t, ping_t)
+-	# allow access to the terminal
+-	allow ping_t { ttyfile ptyfile }:chr_file rw_file_perms;
+-	ifdef(`gnome-pty-helper.te', `allow ping_t gphdomain:fd use;')
+-}
++#if (user_ping) {
++#      domain_auto_trans(unpriv_userdomain, ping_exec_t, ping_t)
++#      # allow access to the terminal
++#      allow ping_t { ttyfile ptyfile }:chr_file rw_file_perms;
++#      ifdef(`gnome-pty-helper.te', `allow ping_t gphdomain:fd use;')
++#}
+ 
+ # Transition into this domain when you run this program.
+ domain_auto_trans(sysadm_t, ping_exec_t, ping_t)
+@@ -32,6 +32,7 @@
+ 
+ uses_shlib(ping_t)
+ can_network(ping_t)
++can_ypbind(ping_t)
+ allow ping_t { etc_t resolv_conf_t }:file { getattr read };
+ allow ping_t self:unix_stream_socket create_socket_perms;
+ 
+--- policy-1.6/domains/program/unused/xserver.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/domains/program/unused/xserver.te	2004-02-21 08:26:24.530421471 -0500
+@@ -13,12 +13,6 @@
+ # type for /var/lib/xkb
+ type var_lib_xkb_t, file_type, sysadmfile;
+ 
+-ifdef(`rhgb.te', `
+-allow xdm_xserver_t ramfs_t:dir rw_dir_perms;
+-allow xdm_xserver_t ramfs_t:file create_file_perms;
+-allow rhgb_t xdm_xserver_t:process signal;
+-')
+-
+ # Everything else is in the xserver_domain macro in
+ # macros/program/xserver_macros.te.
+ 
+--- policy-1.6/domains/program/unused/kudzu.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/domains/program/unused/kudzu.te	2004-02-21 08:26:24.585415201 -0500
+@@ -64,3 +64,4 @@
+ allow kudzu_t sysfs_t:dir { getattr read search };
+ allow kudzu_t sysfs_t:file { getattr read };
+ allow kudzu_t sysfs_t:lnk_file read;
++file_type_auto_trans(kudzu_t, etc_t, etc_runtime_t, file)
+--- policy-1.6/domains/program/unused/procmail.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/domains/program/unused/procmail.te	2004-02-21 08:26:24.594414174 -0500
+@@ -19,6 +19,7 @@
+ uses_shlib(procmail_t)
+ allow procmail_t device_t:dir search;
+ can_network(procmail_t)
++can_ypbind(procmail_t)
+ 
+ allow procmail_t self:capability { sys_nice chown setuid setgid dac_override };
+ 
+--- /dev/null	2004-01-21 11:12:15.000000000 -0500
++++ policy-1.6/domains/program/unused/uml_net.te	2004-02-21 08:26:24.584415315 -0500
+@@ -0,0 +1,36 @@
++#DESC uml_net helper program for user-mode Linux
++#
++# Author: Russell Coker <russell@coker.com.au>
++#
++# WARNING: Do not install this file on any machine that has hostile users.
++
++type uml_net_t, domain, privlog;
++type uml_net_exec_t, file_type, sysadmfile, exec_type;
++in_user_role(uml_net_t)
++allow uml_net_t self:process { fork signal_perms };
++allow uml_net_t { bin_t sbin_t }:dir search;
++allow uml_net_t self:fifo_file { read write };
++allow uml_net_t device_t:dir search;
++allow uml_net_t self:udp_socket { create ioctl };
++uses_shlib(uml_net_t)
++allow uml_net_t devtty_t:chr_file { read write };
++allow uml_net_t etc_runtime_t:file { getattr read };
++allow uml_net_t etc_t:file read;
++allow uml_net_t { proc_t sysctl_t sysctl_net_t }:dir search;
++allow uml_net_t proc_t:file { getattr read };
++
++# if you want ip_forward to be set then you should set it yourself
++dontaudit uml_net_t { sysctl_t sysctl_net_t }:dir search;
++dontaudit uml_net_t sysctl_net_t:file write;
++
++dontaudit ifconfig_t uml_net_t:udp_socket { read write };
++dontaudit uml_net_t self:capability { sys_module };
++
++domain_auto_trans(uml_net_t, ifconfig_exec_t, ifconfig_t)
++allow uml_net_t tun_tap_device_t:chr_file { read write getattr ioctl };
++can_exec(uml_net_t, { shell_exec_t sbin_t })
++
++
++# this is really bad for security!
++in_user_role(ifconfig_t)
++
+--- policy-1.6/domains/program/unused/ntpd.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/domains/program/unused/ntpd.te	2004-02-21 08:26:24.590414630 -0500
+@@ -34,6 +34,7 @@
+ 
+ # Use the network.
+ can_network(ntpd_t)
++can_ypbind(ntpd_t)
+ allow ntpd_t ntp_port_t:udp_socket name_bind;
+ allow ntpd_t self:unix_dgram_socket create_socket_perms;
+ allow ntpd_t self:unix_stream_socket create_socket_perms;
+--- policy-1.6/domains/program/unused/apache.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/domains/program/unused/apache.te	2004-02-21 08:26:24.581415657 -0500
+@@ -218,3 +218,7 @@
+ allow httpd_php_t mysqld_var_run_t:dir { search };
+ allow httpd_php_t mysqld_var_run_t:sock_file { write };
+ ')
++allow httpd_t bin_t:dir { search };
++allow httpd_t sbin_t:dir { search };
++allow httpd_t httpd_log_t:dir { remove_name };
++allow httpd_t self:netlink_socket { create };
+--- policy-1.6/domains/program/unused/spamd.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/domains/program/unused/spamd.te	2004-02-21 08:26:24.595414060 -0500
+@@ -52,3 +52,12 @@
+ allow spamd_t urandom_device_t:chr_file { getattr read };
+ 
+ system_crond_entry(spamd_exec_t, spamd_t)
++
++ifdef(`nfs_home_dirs', `
++ifdef(`automount.te', `
++allow spamd_t autofs_t:dir { search getattr };
++')
++allow spamd_t nfs_t:dir rw_dir_perms;
++allow spamd_t nfs_t:file create_file_perms;
++')dnl end if nfs_home_dirs
++
+--- policy-1.6/domains/program/unused/prelink.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/domains/program/unused/prelink.te	2004-02-21 08:26:24.579415885 -0500
+@@ -13,27 +13,27 @@
+ 
+ allow prelink_t fs_t:filesystem getattr;
+ 
++type etc_prelink_t, file_type, sysadmfile;
++type var_lock_prelink_t, file_type, sysadmfile, lockfile;
++
++logdir_domain(prelink)
+ ifdef(`crond.te', `
+ system_crond_entry(prelink_exec_t, prelink_t)
+ allow system_crond_t prelink_log_t:dir rw_dir_perms;
+ allow system_crond_t prelink_log_t:file { create append getattr };
++allow prelink_t crond_log_t:file { append };
+ ')
+ 
+-logdir_domain(prelink)
+-type etc_prelink_t, file_type, sysadmfile;
+-type var_lock_prelink_t, file_type, sysadmfile, lockfile;
+-
+ allow prelink_t etc_prelink_t:file { getattr read };
+ allow prelink_t file_type:dir rw_dir_perms;
+ allow prelink_t file_type:lnk_file r_file_perms;
+ allow prelink_t file_type:file { getattr };
+-allow prelink_t { su_exec_t shlib_t sbin_t bin_t lib_t exec_type }:file { create_file_perms execute relabelto relabelfrom };
++allow prelink_t { httpd_modules_t ld_so_t su_exec_t shlib_t sbin_t bin_t lib_t exec_type }:file { create_file_perms execute relabelto relabelfrom };
+ allow prelink_t self:capability { chown dac_override fowner fsetid };
+ allow prelink_t self:fifo_file rw_file_perms;
+ allow prelink_t self:file { getattr read };
+ dontaudit prelink_t sysctl_kernel_t:dir search;
+ dontaudit prelink_t sysctl_t:dir search;
+-allow prelink_t prelink_log_t:file create_file_perms;
+ allow prelink_t etc_runtime_t:file { getattr read };
+ read_locale(prelink_t)
+ allow prelink_t urandom_device_t:chr_file { read };
+--- policy-1.6/domains/program/unused/ftpd.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/domains/program/unused/ftpd.te	2004-02-21 08:26:24.597413832 -0500
+@@ -55,7 +55,7 @@
+ 
+ # Send SIGCHLD to inetd on death.
+ allow ftpd_t inetd_t:process sigchld;
+-')dnl end inetd.te
++') dnl end inetd.te
+ ')dnl end (else) ftp_is_daemon
+ 
+ ifdef(`ftp_shm', `
+@@ -66,11 +66,6 @@
+ # Use capabilities.
+ allow ftpd_t ftpd_t:capability { net_bind_service setuid setgid fowner fsetid chown sys_resource sys_chroot };
+ 
+-ifdef(`inetd.te', `
+-# Connect to inetd.
+-can_tcp_connect(ftpd_t,inetd_t)
+-')
+-
+ # Append to /var/log/wtmp.
+ allow ftpd_t wtmp_t:file { getattr append };
+ 
+--- policy-1.6/domains/program/unused/rpm.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/domains/program/unused/rpm.te	2004-02-21 08:26:24.592414402 -0500
+@@ -120,3 +120,9 @@
+ 
+ allow rpm_script_t self:process { fork signal_perms };
+ 
++ifdef(`ssh-agent.te', `
++role system_r types sysadm_ssh_agent_t;
++domain_auto_trans(rpm_script_t, ssh_agent_exec_t, sysadm_ssh_agent_t)
++')
++
++domain_auto_trans(rpm_script_t, ldconfig_exec_t, ldconfig_t)
+--- policy-1.6/domains/program/unused/sendmail.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/domains/program/unused/sendmail.te	2004-02-21 08:26:24.627410412 -0500
+@@ -26,6 +26,7 @@
+ 
+ # Use the network.
+ can_network(sendmail_t)
++can_ypbind(sendmail_t)
+ allow sendmail_t resolv_conf_t:file { getattr read };
+ 
+ allow sendmail_t self:unix_stream_socket create_stream_socket_perms;
+@@ -91,3 +92,4 @@
+ allow system_mail_t mqueue_spool_t:file create_file_perms;
+ 
+ allow system_mail_t sysctl_kernel_t:file read;
++allow system_mail_t system_crond_tmp_t:file { append };
+--- /dev/null	2004-01-21 11:12:15.000000000 -0500
++++ policy-1.6/domains/program/unused/uml.te	2004-02-21 08:26:24.582415543 -0500
+@@ -0,0 +1,14 @@
++
++# Author: Russell Coker <russell@coker.com.au>
++#
++type uml_exec_t, file_type, sysadmfile, exec_type;
++type uml_ro_t, file_type, sysadmfile;
++
++# the main code is in macros/program/uml_macros.te
++
++daemon_domain(uml_switch)
++allow uml_switch_t self:unix_dgram_socket create_socket_perms;
++allow uml_switch_t self:unix_stream_socket create_stream_socket_perms;
++allow uml_switch_t uml_switch_var_run_t:sock_file create_file_perms;
++rw_dir_create_file(initrc_t, uml_switch_var_run_t)
++
+--- /dev/null	2004-01-21 11:12:15.000000000 -0500
++++ policy-1.6/domains/program/unused/anaconda.te	2004-02-21 08:50:38.951578666 -0500
+@@ -0,0 +1,249 @@
++#DESC Anaconda - Red Hat Installation program
++#
++# Authors:  Dan Walsh <dwalsh@redhat.com>
++#
++#
++
++#################################
++#
++# Rules for the anaconda_t domain.
++#
++# anaconda_t is the domain of the installation program
++#
++type anaconda_t, domain, privlog, privowner, privmodule, privmail;
++role system_r types anaconda_t;
++uses_shlib(anaconda_t);
++
++# for halt to down interfaces
++allow anaconda_t self:udp_socket create_socket_perms;
++
++# read files in /etc/init.d
++allow anaconda_t etc_t:lnk_file r_file_perms;
++
++read_locale(anaconda_t)
++
++r_dir_file(anaconda_t, usr_t)
++
++# Read system information files in /proc.
++allow anaconda_t proc_t:dir r_dir_perms;
++allow anaconda_t proc_t:{ file lnk_file } r_file_perms;
++
++# Allow IPC with self
++allow anaconda_t self:unix_dgram_socket create_socket_perms;
++allow anaconda_t self:unix_stream_socket { connectto create_stream_socket_perms };
++allow anaconda_t self:fifo_file rw_file_perms;
++
++# Read the root directory of a usbdevfs filesystem, and
++# the devices and drivers files.  Permit stating of the
++# device nodes, but nothing else.
++allow anaconda_t usbdevfs_t:dir r_dir_perms;
++allow anaconda_t usbdevfs_t:lnk_file r_file_perms;
++allow anaconda_t usbdevfs_t:file getattr;
++
++# allow anaconda to fork and renice itself
++allow anaconda_t self:process { fork sigchld setsched setpgid };
++
++# Can create ptys for open_init_pty
++can_create_pty(anaconda)
++
++tmp_domain(anaconda)
++
++var_run_domain(anaconda)
++allow anaconda_t var_run_t:{ file sock_file lnk_file } unlink;
++allow anaconda_t var_run_t:dir { create rmdir };
++
++allow anaconda_t framebuf_device_t:chr_file r_file_perms;
++
++# Use capabilities.
++allow anaconda_t self:capability ~{ sys_admin sys_module };
++
++# Use system operations.
++allow anaconda_t kernel_t:system *;
++
++# Run helper programs in the anaconda_t domain.
++allow anaconda_t {bin_t sbin_t }:dir r_dir_perms;
++allow anaconda_t {bin_t sbin_t }:lnk_file read;
++can_exec(anaconda_t, etc_t)
++can_exec(anaconda_t, lib_t)
++can_exec(anaconda_t, bin_t)
++can_exec(anaconda_t, sbin_t)
++can_exec(anaconda_t, exec_type)
++#
++#  These rules are here to allow init scripts to su
++#
++role system_r types sysadm_su_t;
++domain_auto_trans(anaconda_t, su_exec_t, sysadm_su_t)
++allow anaconda_t self:passwd rootok;
++
++# read /lib/modules
++allow anaconda_t modules_object_t:dir { search read };
++
++# Read conf.modules.
++allow anaconda_t modules_conf_t:file r_file_perms;
++
++# Run other rc scripts in the anaconda_t domain.
++can_exec(anaconda_t, initrc_exec_t)
++
++# Run init (telinit) in the anaconda_t domain.
++can_exec(anaconda_t, init_exec_t)
++
++# Communicate with the init process.
++allow anaconda_t initctl_t:fifo_file rw_file_perms;
++
++# Read /proc/PID directories for all domains.
++r_dir_file(anaconda_t, domain)
++allow anaconda_t domain:process { getattr getsession };
++
++# Mount and unmount file systems.
++allow anaconda_t fs_type:filesystem mount_fs_perms;
++allow anaconda_t file_t:dir { read search getattr mounton };
++
++allow anaconda_t resolv_conf_t:file { getattr read };
++
++# Update /etc/ld.so.cache.
++allow anaconda_t ld_so_cache_t:file rw_file_perms;
++
++ifdef(`sendmail.te', `
++# Update /etc/mail.
++allow anaconda_t etc_mail_t:file { setattr rw_file_perms };
++')
++
++# Update /var/log/wtmp and /var/log/dmesg.
++allow anaconda_t wtmp_t:file { setattr rw_file_perms };
++allow anaconda_t var_log_t:file { setattr rw_file_perms };
++allow anaconda_t lastlog_t:file { setattr rw_file_perms };
++domain_auto_trans(anaconda_t, dmesg_exec_t, dmesg_t)
++
++# remove old locks
++allow anaconda_t lockfile:dir rw_dir_perms;
++allow anaconda_t lockfile:file { getattr unlink };
++
++# Access /var/lib/random-seed.
++allow anaconda_t var_lib_t:file rw_file_perms;
++allow anaconda_t var_lib_t:file unlink;
++
++# Create lock file.
++allow anaconda_t var_lock_t:dir create_dir_perms;
++allow anaconda_t var_lock_t:file create_file_perms;
++
++# Set the clock.
++allow anaconda_t clock_device_t:devfile_class_set rw_file_perms;
++
++# Kill all processes.
++allow anaconda_t domain:process signal_perms;
++
++# Write to /dev/urandom.
++allow anaconda_t urandom_device_t:chr_file rw_file_perms;
++
++# Set device ownerships/modes.
++allow anaconda_t framebuf_device_t:lnk_file read;
++allow anaconda_t framebuf_device_t:devfile_class_set setattr;
++allow anaconda_t misc_device_t:devfile_class_set setattr;
++allow anaconda_t device_t:devfile_class_set setattr;
++allow anaconda_t fixed_disk_device_t:devfile_class_set setattr;
++allow anaconda_t removable_device_t:devfile_class_set setattr;
++
++# Stat any file.
++allow anaconda_t file_type:file_class_set getattr;
++allow anaconda_t file_type:dir { search getattr };
++
++# Read and write console and ttys.
++allow anaconda_t devtty_t:chr_file rw_file_perms;
++allow anaconda_t console_device_t:chr_file rw_file_perms;
++allow anaconda_t tty_device_t:chr_file rw_file_perms;
++allow anaconda_t ttyfile:chr_file rw_file_perms;
++allow anaconda_t ptyfile:chr_file rw_file_perms;
++
++# Reset tty labels.
++allow anaconda_t ttyfile:chr_file relabelfrom;
++allow anaconda_t tty_device_t:chr_file relabelto;
++
++ifdef(`rpm.te', `
++# Create and read /boot/kernel.h and /boot/System.map.
++# Redhat systems typically create this file at boot time.
++allow anaconda_t boot_t:lnk_file rw_file_perms;
++file_type_auto_trans(anaconda_t, boot_t, boot_runtime_t, file)
++')
++
++allow anaconda_t system_map_t:{ file lnk_file } r_file_perms;
++
++# Unlink /halt.
++allow anaconda_t root_t:dir { search write remove_name };
++allow anaconda_t root_t:file { unlink write };
++
++allow anaconda_t var_spool_t:file rw_file_perms;
++
++# Allow access to the sysadm TTYs. Note that this will give access to the 
++# TTYs to any process in the anaconda_t domain. Therefore, daemons and such
++# started from init should be placed in their own domain.
++allow anaconda_t admin_tty_type:chr_file rw_file_perms;
++
++# Access sound device and files.
++allow anaconda_t sound_device_t:chr_file { setattr ioctl read write };
++ifdef(`sound.te', `allow anaconda_t sound_file_t:file { setattr write };')
++
++ifdef(`rpm.te', `
++# Access /var/lib/rpm.
++allow anaconda_t var_lib_rpm_t:dir rw_dir_perms;
++allow anaconda_t var_lib_rpm_t:file create_file_perms;
++domain_auto_trans(anaconda_t, rpm_exec_t, rpm_t)
++')
++
++# Update /var/log/ksyms.*.
++# badly named type, /var/log/boot gets the same name too which is confusing
++file_type_auto_trans(anaconda_t, var_log_t, var_log_ksyms_t, file)
++
++ifdef(`apmd.te',
++`# Access /dev/apm_bios.
++allow anaconda_t apm_bios_t:chr_file { setattr getattr };')
++
++ifdef(`lpd.te',
++`# Read printconf files.
++allow anaconda_t printconf_t:dir r_dir_perms;
++allow anaconda_t printconf_t:file r_file_perms;')
++
++# Create and delete /.autofsck
++allow anaconda_t root_t:dir { search write add_name };
++allow anaconda_t root_t:file { create setattr unlink getattr };
++allow anaconda_t file_t:file { unlink getattr };
++
++# Read user home directories.
++allow anaconda_t { home_root_t home_type }:dir r_dir_perms;
++allow anaconda_t home_type:file r_file_perms;
++
++# for system start scripts
++allow anaconda_t pidfile:dir rw_dir_perms;
++allow anaconda_t pidfile:sock_file unlink;
++rw_dir_create_file(anaconda_t, var_lib_t)
++
++# allow start scripts to clean /tmp
++allow anaconda_t { unlabeled_t tmpfile }:dir { rw_dir_perms rmdir };
++allow anaconda_t { unlabeled_t tmpfile }:notdevfile_class_set { getattr unlink };
++
++# for lsof which is used by alsa shutdown
++dontaudit anaconda_t domain:{ udp_socket tcp_socket fifo_file unix_dgram_socket } getattr;
++dontaudit anaconda_t proc_kmsg_t:file getattr;
++
++# Rsync
++dontaudit anaconda_t mail_spool_t:lnk_file read;
++
++allow anaconda_t sysfs_t:dir { getattr read search };
++allow anaconda_t sysfs_t:file { getattr read };
++allow anaconda_t sysfs_t:lnk_file { getattr read };
++allow anaconda_t udev_runtime_t:file rw_file_perms;
++allow anaconda_t device_type:chr_file { setattr };
++
++# for lsof in shutdown scripts
++allow anaconda_t security_t:dir getattr;
++ifdef(`udev.te', `
++domain_auto_trans(anaconda_t, udev_exec_t, udev_t)
++')
++allow anaconda_t krb5_conf_t:file read;
++dontaudit anaconda_t krb5_conf_t:file write;
++
++allow anaconda_t dmesg_log_t:file { write };
++
++ifdef(`ssh-agent.te', `
++role system_r types sysadm_ssh_agent_t;
++domain_auto_trans(anaconda_t, ssh_agent_exec_t, sysadm_ssh_agent_t)
++')
+--- policy-1.6/domains/program/unused/samba.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/domains/program/unused/samba.te	2004-02-21 08:26:24.626410526 -0500
+@@ -45,6 +45,7 @@
+ 
+ # Use the network.
+ can_network(smbd_t)
++can_ypbind(smbd_t)
+ allow smbd_t resolv_conf_t:file { getattr read };
+ 
+ allow smbd_t random_device_t:chr_file { getattr read };
+--- policy-1.6/domains/program/crond.te.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/domains/program/crond.te	2004-02-21 08:26:24.524422155 -0500
+@@ -173,3 +173,11 @@
+ allow crond_t var_spool_t:file { getattr read };
+ allow system_crond_t devpts_t:filesystem getattr;
+ allow system_crond_t sysfs_t:filesystem getattr;
++allow system_crond_t tmpfs_t:filesystem getattr;
++
++#
++#  These rules are here to allow init scripts to su
++#
++role system_r types sysadm_su_t;
++domain_auto_trans(system_crond_t, su_exec_t, sysadm_su_t)
++allow system_crond_t self:passwd rootok;
+--- /dev/null	2004-01-21 11:12:15.000000000 -0500
++++ policy-1.6/remove-unwanted-policy	2004-02-21 08:26:25.213343600 -0500
+@@ -0,0 +1,78 @@
++#!/usr/bin/perl
++use strict;
++
++my $method = $ARGV[1];
++
++chdir("/usr/share/selinux/policy") or die "Couldn't chdir: $!";
++my %newfiles = readfile("newfiles");
++my %delfiles = readfile("delfiles");
++my %ignorediff = readfile("ignorediff");
++chdir("current") or die "Can't access directory current: $!";
++my %current = findit();
++chdir("..") or die "Can't change directory: $!";
++
++my $file;
++
++foreach $file (keys %current)
++{
++  if($ignorediff{$file} != 1)
++  {
++    open(INPUT, "<current/$file") or die "Can't open $file";
++    my $line = <INPUT>;
++    if("#DESC " eq substr($line, 0, 6))
++    {
++      LOOP: while(1)
++      {
++        print "Do you want $file:" . substr($line, 6);
++        print "Yes/No/Display [Y/n/d]? ";
++        my $in = lc(substr(<STDIN>, 0, 1));
++        SWITCH: {
++          if($in =~ /n/ ) { system("rm current/$file"); $delfiles{$file} = 1; last LOOP; }
++          if($in =~ /d/) { system("less current/$file"); last SWITCH; }
++          last LOOP;
++        }
++      }
++    }
++  }
++}
++
++open(OUT, ">delfiles") or die "Can't write to list of deleted files.";
++foreach $file (keys %delfiles)
++{
++  if($delfiles{$file} == 1)
++  {
++    printf(OUT "%s\n", $file) or die "Can't write to file";
++  }
++}
++close(OUT);
++
++
++sub findit
++{
++  open(INPUT, "find domains/program -type f 2> /dev/null |") or die "Can't find.";
++  my %files = ();
++  while(<INPUT>)
++  {
++    chomp;
++    if($_ =~ /\/.*\//)
++    {
++      $files{$_} = 1;
++    }
++  }
++  close(INPUT);
++  return %files;
++}
++
++sub readfile
++{
++  open(INPUT, "<" . $_[0]) or return ();
++  my %files = ();
++
++  while(<INPUT>)
++  {
++    chomp;
++    $files{$_} = 1;
++  }
++  close(INPUT);
++  return %files;
++}
+--- policy-1.6/file_contexts/program/samba.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/samba.fc	2004-02-21 08:26:24.997368227 -0500
+@@ -4,7 +4,7 @@
+ /etc/samba(/.*)?		system_u:object_r:samba_etc_t
+ /var/log/samba(/.*)?		system_u:object_r:samba_log_t
+ /var/cache/samba(/.*)?		system_u:object_r:samba_var_t
+-/var/lib/samba(/.*)?		system_u:object_r:samba_var_t
++/var/lib(64)?/samba(/.*)?		system_u:object_r:samba_var_t
+ /etc/samba/secrets\.tdb	--	system_u:object_r:samba_secrets_t
+ /etc/samba/MACHINE\.SID	--	system_u:object_r:samba_secrets_t
+ # samba really wants write access to smbpasswd
+--- policy-1.6/file_contexts/program/ntpd.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/ntpd.fc	2004-02-21 08:26:24.856384303 -0500
+@@ -1,4 +1,4 @@
+-/var/lib/ntp(/.*)?			system_u:object_r:ntp_drift_t
++/var/lib(64)?/ntp(/.*)?			system_u:object_r:ntp_drift_t
+ /etc/ntp/data(/.*)?			system_u:object_r:ntp_drift_t
+ /etc/ntp\.conf			--	system_u:object_r:etc_ntp_t
+ /usr/sbin/ntpd			--	system_u:object_r:ntpd_exec_t
+--- policy-1.6/file_contexts/program/postgresql.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/postgresql.fc	2004-02-21 08:26:24.837386469 -0500
+@@ -1,6 +1,6 @@
+ # postgresql - ldap server
+-/usr/lib/postgresql/bin/.* --	system_u:object_r:postgresql_exec_t
+-/var/lib/postgres(/.*)?		system_u:object_r:postgresql_db_t
++/usr/lib(64)?/postgresql/bin/.* --	system_u:object_r:postgresql_exec_t
++/var/lib(64)?/postgres(/.*)?		system_u:object_r:postgresql_db_t
+ /var/run/postgresql(/.*)?	system_u:object_r:postgresql_var_run_t
+ /etc/postgresql(/.*)?		system_u:object_r:etc_postgresql_t
+ /var/log/postgres\.log.* --	system_u:object_r:postgresql_log_t
+--- policy-1.6/file_contexts/program/slocate.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/slocate.fc	2004-02-21 08:26:25.009366859 -0500
+@@ -1,4 +1,4 @@
+ # locate - file locater
+ /usr/bin/slocate		--	system_u:object_r:locate_exec_t
+-/var/lib/slocate(/.*)?			system_u:object_r:var_lib_locate_t
++/var/lib(64)?/slocate(/.*)?			system_u:object_r:var_lib_locate_t
+ /etc/updatedb.conf		--	system_u:object_r:etc_locate_t
+--- policy-1.6/file_contexts/program/snmpd.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/snmpd.fc	2004-02-21 08:26:24.842385899 -0500
+@@ -1,6 +1,6 @@
+ # snmpd
+ /usr/sbin/snmp(trap)?d	--	system_u:object_r:snmpd_exec_t
+-/var/lib/snmp(/.*)?		system_u:object_r:snmpd_var_lib_t
++/var/lib(64)?/snmp(/.*)?		system_u:object_r:snmpd_var_lib_t
+ /etc/snmp/snmp(trap)?d\.conf -- system_u:object_r:etc_snmpd_t
+ /usr/share/snmp/mibs/\.index -- system_u:object_r:snmpd_var_lib_t
+ /var/run/snmpd\.pid	--	system_u:object_r:snmpd_var_run_t
+--- policy-1.6/file_contexts/program/authbind.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/authbind.fc	2004-02-21 08:26:24.781392854 -0500
+@@ -1,3 +1,3 @@
+ # authbind
+ /etc/authbind(/.*)?		system_u:object_r:etc_authbind_t
+-/usr/lib/authbind/helper --	system_u:object_r:authbind_exec_t
++/usr/lib(64)?/authbind/helper --	system_u:object_r:authbind_exec_t
+--- policy-1.6/file_contexts/program/mysqld.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/mysqld.fc	2004-02-21 08:26:24.840386127 -0500
+@@ -2,6 +2,6 @@
+ /usr/sbin/mysqld	--	system_u:object_r:mysqld_exec_t
+ /var/run/mysqld(/.*)?		system_u:object_r:mysqld_var_run_t
+ /var/log/mysql.*	--	system_u:object_r:mysqld_log_t
+-/var/lib/mysql(/.*)?		system_u:object_r:mysqld_db_t
++/var/lib(64)?/mysql(/.*)?		system_u:object_r:mysqld_db_t
+ /etc/my\.cnf		--	system_u:object_r:etc_mysqld_t
+ /etc/mysql(/.*)?		system_u:object_r:etc_mysqld_t
+--- policy-1.6/file_contexts/program/gnome-pty-helper.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/gnome-pty-helper.fc	2004-02-21 08:26:24.638409158 -0500
+@@ -1,3 +1,3 @@
+ # gnome-pty-helper
+ /usr/sbin/gnome-pty-helper --	system_u:object_r:gph_exec_t
+-/usr/lib/vte/gnome-pty-helper --	system_u:object_r:gph_exec_t
++/usr/lib(64)?/vte/gnome-pty-helper --	system_u:object_r:gph_exec_t
+--- policy-1.6/file_contexts/program/ssh.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/ssh.fc	2004-02-21 08:26:24.635409500 -0500
+@@ -9,6 +9,6 @@
+ /root/\.ssh(/.*)?		system_u:object_r:sysadm_home_ssh_t
+ /home/[^/]+/\.ssh(/.*)?		system_u:object_r:user_home_ssh_t
+ # subsystems
+-/usr/lib/misc/sftp-server --	system_u:object_r:bin_t
++/usr/lib(64)?/misc/sftp-server --	system_u:object_r:bin_t
+ /usr/libexec/openssh/sftp-server -- system_u:object_r:bin_t
+-/usr/lib/sftp-server	--	system_u:object_r:bin_t
++/usr/lib(64)?/sftp-server	--	system_u:object_r:bin_t
+--- policy-1.6/file_contexts/program/netsaint.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/netsaint.fc	2004-02-21 08:26:25.001367771 -0500
+@@ -3,5 +3,5 @@
+ #/var/run/netsaint(/.*)?		system_u:object_r:netsaint_var_run_t
+ /etc/netsaint(/.*)?			system_u:object_r:etc_netsaint_t
+ /var/log/netsaint(/.*)?			system_u:object_r:netsaint_log_t
+-/usr/lib/netsaint/plugins(/.*)?		system_u:object_r:bin_t
+-/usr/lib/cgi-bin/netsaint/.+	--	system_u:object_r:netsaint_cgi_exec_t
++/usr/lib(64)?/netsaint/plugins(/.*)?		system_u:object_r:bin_t
++/usr/lib(64)?/cgi-bin/netsaint/.+	--	system_u:object_r:netsaint_cgi_exec_t
+--- /dev/null	2004-01-21 11:12:15.000000000 -0500
++++ policy-1.6/file_contexts/program/uml_net.fc	2004-02-21 08:26:24.771393994 -0500
+@@ -0,0 +1,3 @@
++# User Mode Linux
++# WARNING: Do not install this file on any machine that has hostile users.
++/usr/lib(64)?/uml/uml_net	--	system_u:object_r:uml_net_exec_t
+--- policy-1.6/file_contexts/program/mta.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/mta.fc	2004-02-21 08:26:24.641408816 -0500
+@@ -1,6 +1,6 @@
+ # types for general mail servers
+-/usr/sbin/sendmail(.sendmail)?	system_u:object_r:sendmail_exec_t
+-/usr/lib/sendmail		system_u:object_r:sendmail_exec_t
++/usr/sbin/sendmail(.sendmail)?	-- system_u:object_r:sendmail_exec_t
++/usr/lib(64)?/sendmail		-- system_u:object_r:sendmail_exec_t
+ /etc/aliases		--	system_u:object_r:etc_aliases_t
+ /etc/aliases\.db	--	system_u:object_r:etc_aliases_t
+ /var/spool/mail(/.*)?		system_u:object_r:mail_spool_t
+--- policy-1.6/file_contexts/program/cardmgr.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/cardmgr.fc	2004-02-21 08:26:24.646408246 -0500
+@@ -4,4 +4,4 @@
+ /var/run/stab		--	system_u:object_r:cardmgr_var_run_t
+ /var/run/cardmgr.pid	--	system_u:object_r:cardmgr_var_run_t
+ /etc/apm/event\.d/pcmcia --	system_u:object_r:cardmgr_exec_t
+-/var/lib/pcmcia(/.*)?		system_u:object_r:cardmgr_var_run_t
++/var/lib(64)?/pcmcia(/.*)?		system_u:object_r:cardmgr_var_run_t
+--- policy-1.6/file_contexts/program/modutil.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/modutil.fc	2004-02-21 08:26:24.765394678 -0500
+@@ -1,10 +1,10 @@
+ # module utilities
+ /etc/modules\.conf.*	--	system_u:object_r:modules_conf_t
+ /etc/modprobe\.conf.*	--	system_u:object_r:modules_conf_t
+-/lib/modules/modprobe.conf --	system_u:object_r:modules_conf_t
+-/lib/modules(/.*)?		system_u:object_r:modules_object_t
+-/lib/modules/[^/]+/modules\..+ -- system_u:object_r:modules_dep_t
+-/lib/modules/modprobe\.conf.* -- system_u:object_r:modules_conf_t
++/lib(64)?/modules/modprobe.conf --	system_u:object_r:modules_conf_t
++/lib(64)?/modules(/.*)?		system_u:object_r:modules_object_t
++/lib(64)?/modules/[^/]+/modules\..+ -- system_u:object_r:modules_dep_t
++/lib(64)?/modules/modprobe\.conf.* -- system_u:object_r:modules_conf_t
+ /sbin/depmod.*		--	system_u:object_r:depmod_exec_t
+ /sbin/modprobe.*	--	system_u:object_r:insmod_exec_t
+ /sbin/insmod.*		--	system_u:object_r:insmod_exec_t
+--- policy-1.6/file_contexts/program/vmware.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/vmware.fc	2004-02-21 08:26:24.636409386 -0500
+@@ -23,10 +23,10 @@
+ /dev/plex86		-c	system_u:object_r:vmware_device_t
+ 
+ /etc/vmware.*(/.*)?		system_u:object_r:vmware_sys_conf_t
+-/usr/lib/vmware/config	--	system_u:object_r:vmware_sys_conf_t
++/usr/lib(64)?/vmware/config	--	system_u:object_r:vmware_sys_conf_t
+ 
+-/usr/lib/vmware/bin/vmware-mks -- system_u:object_r:vmware_user_exec_t
+-/usr/lib/vmware/bin/vmware-ui -- system_u:object_r:vmware_user_exec_t
++/usr/lib(64)?/vmware/bin/vmware-mks -- system_u:object_r:vmware_user_exec_t
++/usr/lib(64)?/vmware/bin/vmware-ui -- system_u:object_r:vmware_user_exec_t
+ 
+ #
+ # This is only an example of how to protect vmware session configuration
+--- policy-1.6/file_contexts/program/amavis.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/amavis.fc	2004-02-21 08:26:24.767394450 -0500
+@@ -2,5 +2,5 @@
+ /usr/sbin/amavisd.*		--	system_u:object_r:amavisd_exec_t
+ /etc/amavisd.conf		--	system_u:object_r:amavisd_etc_t
+ /var/log/amavisd.log 		--	system_u:object_r:amavisd_log_t
+-/var/lib/amavis(/.*)?	 		system_u:object_r:amavisd_lib_t
++/var/lib(64)?/amavis(/.*)?	 		system_u:object_r:amavisd_lib_t
+ /var/run/amavis(/.*)?	 		system_u:object_r:amavisd_var_run_t
+--- policy-1.6/file_contexts/program/courier.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/courier.fc	2004-02-21 08:26:25.206344398 -0500
+@@ -1,14 +1,14 @@
+ # courier pop, imap, and webmail
+-/usr/lib/courier(/.*)?			system_u:object_r:bin_t
+-/usr/lib/courier/rootcerts(/.*)?	system_u:object_r:etc_courier_t
+-/usr/lib/courier/authlib/.*	--	system_u:object_r:courier_authdaemon_exec_t
+-/usr/lib/courier/courier/.*	--	system_u:object_r:courier_exec_t
+-/usr/lib/courier/courier/courierpop.* -- system_u:object_r:courier_pop_exec_t
+-/usr/lib/courier/courier/imaplogin --	system_u:object_r:courier_pop_exec_t
+-/usr/lib/courier/courier/pcpd	--	system_u:object_r:courier_pcp_exec_t
+-/usr/lib/courier/imapd		--	system_u:object_r:courier_pop_exec_t
+-/usr/lib/courier/pop3d		--	system_u:object_r:courier_pop_exec_t
+-/usr/lib/courier/sqwebmail/cleancache.pl -- system_u:object_r:sqwebmail_cron_exec_t
++/usr/lib(64)?/courier(/.*)?			system_u:object_r:bin_t
++/usr/lib(64)?/courier/rootcerts(/.*)?	system_u:object_r:etc_courier_t
++/usr/lib(64)?/courier/authlib/.*	--	system_u:object_r:courier_authdaemon_exec_t
++/usr/lib(64)?/courier/courier/.*	--	system_u:object_r:courier_exec_t
++/usr/lib(64)?/courier/courier/courierpop.* -- system_u:object_r:courier_pop_exec_t
++/usr/lib(64)?/courier/courier/imaplogin --	system_u:object_r:courier_pop_exec_t
++/usr/lib(64)?/courier/courier/pcpd	--	system_u:object_r:courier_pcp_exec_t
++/usr/lib(64)?/courier/imapd		--	system_u:object_r:courier_pop_exec_t
++/usr/lib(64)?/courier/pop3d		--	system_u:object_r:courier_pop_exec_t
++/usr/lib(64)?/courier/sqwebmail/cleancache.pl -- system_u:object_r:sqwebmail_cron_exec_t
+ /usr/bin/imapd			--	system_u:object_r:courier_pop_exec_t
+ /usr/sbin/courierlogger		--	system_u:object_r:courier_exec_t
+ /usr/sbin/courierldapaliasd	--	system_u:object_r:courier_exec_t
+--- policy-1.6/file_contexts/program/xserver.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/xserver.fc	2004-02-21 08:26:24.633409728 -0500
+@@ -5,10 +5,10 @@
+ /usr/X11R6/bin/X	--	system_u:object_r:xserver_exec_t
+ /usr/X11R6/bin/XFree86	--	system_u:object_r:xserver_exec_t
+ /usr/X11R6/bin/Xipaq	--	system_u:object_r:xserver_exec_t
+-/var/lib/xkb(/.*)?		system_u:object_r:var_lib_xkb_t
+-/usr/X11R6/lib/X11/xkb	-d	system_u:object_r:var_lib_xkb_t
+-/usr/X11R6/lib/X11/xkb/.* --	system_u:object_r:var_lib_xkb_t
+-/usr/X11R6/lib/X11/xkb/xkbcomp -- system_u:object_r:bin_t
++/var/lib(64)?/xkb(/.*)?		system_u:object_r:var_lib_xkb_t
++/usr/X11R6/lib(64)?/X11/xkb	-d	system_u:object_r:var_lib_xkb_t
++/usr/X11R6/lib(64)?/X11/xkb/.* --	system_u:object_r:var_lib_xkb_t
++/usr/X11R6/lib(64)?/X11/xkb/xkbcomp -- system_u:object_r:bin_t
+ /var/log/XFree86.*	--	system_u:object_r:xserver_log_t
+ /etc/init\.d/xfree86-common --	system_u:object_r:xserver_exec_t
+ /tmp/\.X11-unix		-d	system_u:object_r:xdm_xserver_tmp_t
+--- policy-1.6/file_contexts/program/dpkg.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/dpkg.fc	2004-02-21 08:26:25.015366175 -0500
+@@ -9,9 +9,9 @@
+ /usr/bin/dselect	--	system_u:object_r:dpkg_exec_t
+ /usr/bin/aptitude	--	system_u:object_r:dpkg_exec_t
+ /usr/bin/update-menus	--	system_u:object_r:install_menu_exec_t
+-/usr/lib/apt/methods/.+	--	system_u:object_r:apt_exec_t
+-/usr/lib/man-db(/.*)?		system_u:object_r:bin_t
+-/usr/lib/dpkg/.+	--	system_u:object_r:dpkg_exec_t
++/usr/lib(64)?/apt/methods/.+	--	system_u:object_r:apt_exec_t
++/usr/lib(64)?/man-db(/.*)?		system_u:object_r:bin_t
++/usr/lib(64)?/dpkg/.+	--	system_u:object_r:dpkg_exec_t
+ /usr/sbin/dpkg-preconfigure --	system_u:object_r:dpkg_exec_t
+ /usr/sbin/install-menu	--	system_u:object_r:install_menu_exec_t
+ /usr/share/applnk(/.*)?		system_u:object_r:debian_menu_t
+@@ -23,11 +23,11 @@
+ /usr/share/bug/[^/]+	--	system_u:object_r:bin_t
+ /var/cache/apt(/.*)?		system_u:object_r:var_cache_apt_t
+ /var/cache/apt-listbugs(/.*)?	system_u:object_r:var_cache_apt_t
+-/var/lib/apt(/.*)?		system_u:object_r:apt_var_lib_t
++/var/lib(64)?/apt(/.*)?		system_u:object_r:apt_var_lib_t
+ /var/state/apt(/.*)?		system_u:object_r:apt_var_lib_t
+-/var/lib/dpkg(/.*)?		system_u:object_r:dpkg_var_lib_t
+-/var/lib/dpkg/(meth)?lock --	system_u:object_r:dpkg_lock_t
+-/var/lib/kde(/.*)?		system_u:object_r:debian_menu_t
++/var/lib(64)?/dpkg(/.*)?		system_u:object_r:dpkg_var_lib_t
++/var/lib(64)?/dpkg/(meth)?lock --	system_u:object_r:dpkg_lock_t
++/var/lib(64)?/kde(/.*)?		system_u:object_r:debian_menu_t
+ /var/spool/kdeapplnk(/.*)?	system_u:object_r:debian_menu_t
+ /var/cache/debconf(/.*)?	system_u:object_r:debconf_cache_t
+ /etc/dpkg/.+		--	system_u:object_r:etc_dpkg_t
+@@ -39,8 +39,8 @@
+ /usr/share/dlint/digparse --	system_u:object_r:bin_t
+ /usr/share/gimp/1.2/user_install -- system_u:object_r:bin_t
+ /usr/share/openoffice.org-debian-files/install-hook -- system_u:object_r:bin_t
+-/var/lib/defoma(/.*)?		system_u:object_r:readable_t
+-/usr/lib/doc-rfc/register-doc-rfc-docs -- system_u:object_r:bin_t
++/var/lib(64)?/defoma(/.*)?		system_u:object_r:readable_t
++/usr/lib(64)?/doc-rfc/register-doc-rfc-docs -- system_u:object_r:bin_t
+ /usr/share/intltool-debian/.* -- system_u:object_r:bin_t
+ /usr/share/po-debconf/intltool-merge -- system_u:object_r:bin_t
+ /usr/share/linuxdoc-tools/sgmlswhich -- system_u:object_r:bin_t
+--- policy-1.6/file_contexts/program/sysstat.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/sysstat.fc	2004-02-21 08:26:24.778393196 -0500
+@@ -1,7 +1,7 @@
+ # sysstat and other sar programs
+-/usr/lib/atsar/atsa.*	--	system_u:object_r:sysstat_exec_t
+-/usr/lib/sysstat/sa.*	--	system_u:object_r:sysstat_exec_t
+-/usr/lib/sa/sadc	--	system_u:object_r:sysstat_exec_t
++/usr/lib(64)?/atsar/atsa.*	--	system_u:object_r:sysstat_exec_t
++/usr/lib(64)?/sysstat/sa.*	--	system_u:object_r:sysstat_exec_t
++/usr/lib(64)?/sa/sadc	--	system_u:object_r:sysstat_exec_t
+ /var/log/atsar(/.*)?		system_u:object_r:var_log_sysstat_t
+ /var/log/sysstat(/.*)?		system_u:object_r:var_log_sysstat_t
+ /var/log/sa(/.*)?		system_u:object_r:var_log_sysstat_t
+--- policy-1.6/file_contexts/program/quota.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/quota.fc	2004-02-21 08:26:24.780392968 -0500
+@@ -1,4 +1,4 @@
+ # quota system
+-/var/lib/quota(/.*)?		system_u:object_r:quota_flag_t
++/var/lib(64)?/quota(/.*)?		system_u:object_r:quota_flag_t
+ /sbin/quota(check|on)	--	system_u:object_r:quota_exec_t
+ /(|home/|var/)a?quota.(user|group) -- system_u:object_r:quota_db_t
+--- policy-1.6/file_contexts/program/games.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/games.fc	2004-02-21 08:26:24.850384987 -0500
+@@ -1,5 +1,5 @@
+ #  games
+ /usr/games/.*	--	system_u:object_r:games_exec_t
+-/usr/lib/games/.* --	system_u:object_r:games_exec_t
++/usr/lib(64)?/games/.* --	system_u:object_r:games_exec_t
+ /var/games(/.*)?	system_u:object_r:games_data_t
+ /usr/bin/micq	--	system_u:object_r:games_exec_t
+--- policy-1.6/file_contexts/program/amanda.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/amanda.fc	2004-02-21 08:26:25.007367087 -0500
+@@ -11,39 +11,39 @@
+ /etc/dumpdates				system_u:object_r:amanda_dumpdates_t
+ /root/restore			-d	system_u:object_r:amanda_recover_dir_t
+ /tmp/amanda(/.*)?			system_u:object_r:amanda_tmp_t
+-/usr/lib/amanda			-d	system_u:object_r:amanda_usr_lib_t
+-/usr/lib/amanda/amandad		--	system_u:object_r:amanda_inetd_exec_t
+-/usr/lib/amanda/amcat\.awk	--	system_u:object_r:amanda_script_exec_t
+-/usr/lib/amanda/amcleanupdisk	--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/amidxtaped	--	system_u:object_r:amanda_inetd_exec_t
+-/usr/lib/amanda/amindexd	--	system_u:object_r:amanda_inetd_exec_t
+-/usr/lib/amanda/amlogroll	--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/amplot\.awk	--	system_u:object_r:amanda_script_exec_t
+-/usr/lib/amanda/amplot\.g	--	system_u:object_r:amanda_script_exec_t
+-/usr/lib/amanda/amplot\.gp	--	system_u:object_r:amanda_script_exec_t
+-/usr/lib/amanda/amtrmidx	--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/amtrmlog	--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/calcsize	--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/chg-chio	--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/chg-chs		--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/chg-manual	--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/chg-mtx		--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/chg-multi	--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/chg-rth		--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/chg-scsi	--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/chg-zd-mtx	--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/driver		--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/dumper		--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/killpgrp	--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/patch-system	--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/planner		--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/rundump		--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/runtar		--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/selfcheck	--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/sendbackup	--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/sendsize	--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/taper		--	system_u:object_r:amanda_exec_t
+-/usr/lib/amanda/versionsuffix	--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda			-d	system_u:object_r:amanda_usr_lib_t
++/usr/lib(64)?/amanda/amandad		--	system_u:object_r:amanda_inetd_exec_t
++/usr/lib(64)?/amanda/amcat\.awk	--	system_u:object_r:amanda_script_exec_t
++/usr/lib(64)?/amanda/amcleanupdisk	--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/amidxtaped	--	system_u:object_r:amanda_inetd_exec_t
++/usr/lib(64)?/amanda/amindexd	--	system_u:object_r:amanda_inetd_exec_t
++/usr/lib(64)?/amanda/amlogroll	--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/amplot\.awk	--	system_u:object_r:amanda_script_exec_t
++/usr/lib(64)?/amanda/amplot\.g	--	system_u:object_r:amanda_script_exec_t
++/usr/lib(64)?/amanda/amplot\.gp	--	system_u:object_r:amanda_script_exec_t
++/usr/lib(64)?/amanda/amtrmidx	--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/amtrmlog	--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/calcsize	--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/chg-chio	--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/chg-chs		--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/chg-manual	--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/chg-mtx		--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/chg-multi	--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/chg-rth		--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/chg-scsi	--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/chg-zd-mtx	--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/driver		--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/dumper		--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/killpgrp	--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/patch-system	--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/planner		--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/rundump		--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/runtar		--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/selfcheck	--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/sendbackup	--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/sendsize	--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/taper		--	system_u:object_r:amanda_exec_t
++/usr/lib(64)?/amanda/versionsuffix	--	system_u:object_r:amanda_exec_t
+ /usr/sbin/amadmin		--	system_u:object_r:amanda_user_exec_t
+ /usr/sbin/amcheck		--	system_u:object_r:amanda_user_exec_t
+ /usr/sbin/amcheckdb		--	system_u:object_r:amanda_user_exec_t
+@@ -62,10 +62,10 @@
+ /usr/sbin/amtape		--	system_u:object_r:amanda_user_exec_t
+ /usr/sbin/amtoc			--	system_u:object_r:amanda_user_exec_t
+ /usr/sbin/amverify		--	system_u:object_r:amanda_user_exec_t
+-/var/lib/amanda			-d	system_u:object_r:amanda_var_lib_t
+-/var/lib/amanda/\.amandahosts	--	system_u:object_r:amanda_config_t
+-/var/lib/amanda/\.bashrc	--	system_u:object_r:amanda_shellconfig_t
+-/var/lib/amanda/\.profile	--	system_u:object_r:amanda_shellconfig_t
+-/var/lib/amanda/disklist	--	system_u:object_r:amanda_data_t
+-/var/lib/amanda/gnutar-lists(/.*)?	system_u:object_r:amanda_gnutarlists_t
+-/var/lib/amanda/index			system_u:object_r:amanda_data_t
++/var/lib(64)?/amanda			-d	system_u:object_r:amanda_var_lib_t
++/var/lib(64)?/amanda/\.amandahosts	--	system_u:object_r:amanda_config_t
++/var/lib(64)?/amanda/\.bashrc	--	system_u:object_r:amanda_shellconfig_t
++/var/lib(64)?/amanda/\.profile	--	system_u:object_r:amanda_shellconfig_t
++/var/lib(64)?/amanda/disklist	--	system_u:object_r:amanda_data_t
++/var/lib(64)?/amanda/gnutar-lists(/.*)?	system_u:object_r:amanda_gnutarlists_t
++/var/lib(64)?/amanda/index			system_u:object_r:amanda_data_t
+--- policy-1.6/file_contexts/program/mailman.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/mailman.fc	2004-02-21 08:26:24.632409842 -0500
+@@ -1,10 +1,10 @@
+ # mailman list server
+-/usr/lib/cgi-bin/mailman/.* --	system_u:object_r:mailman_cgi_exec_t
++/usr/lib(64)?/cgi-bin/mailman/.* --	system_u:object_r:mailman_cgi_exec_t
+ /var/log/mailman(/.*)?		system_u:object_r:mailman_log_t
+-/usr/lib/mailman/cron/qrunner -- system_u:object_r:mailman_queue_exec_t
+-/var/lib/mailman(/.*)?		system_u:object_r:mailman_data_t
+-/var/lib/mailman/cron	--	system_u:object_r:bin_t
+-/usr/lib/mailman/mail/wrapper -- system_u:object_r:mailman_mail_exec_t
+-/var/lib/mailman/archives(/.*)?	system_u:object_r:mailman_archive_t
++/usr/lib(64)?/mailman/cron/qrunner -- system_u:object_r:mailman_queue_exec_t
++/var/lib(64)?/mailman(/.*)?		system_u:object_r:mailman_data_t
++/var/lib(64)?/mailman/cron	--	system_u:object_r:bin_t
++/usr/lib(64)?/mailman/mail/wrapper -- system_u:object_r:mailman_mail_exec_t
++/var/lib(64)?/mailman/archives(/.*)?	system_u:object_r:mailman_archive_t
+ /etc/cron\.daily/mailman --	system_u:object_r:mailman_queue_exec_t
+ /etc/cron\.monthly/mailman --	system_u:object_r:mailman_queue_exec_t
+--- policy-1.6/file_contexts/program/mozilla.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/mozilla.fc	2004-02-21 08:26:25.003367543 -0500
+@@ -8,9 +8,9 @@
+ /usr/bin/mozilla-snapshot --	system_u:object_r:mozilla_exec_t
+ /usr/bin/mozilla-[0-9].* --	system_u:object_r:mozilla_exec_t
+ /usr/bin/mozilla-bin-[0-9].* --	system_u:object_r:mozilla_exec_t
+-/usr/lib/netscape/.+/communicator/communicator-smotif.real -- system_u:object_r:mozilla_exec_t
+-/usr/lib/netscape/base-4/wrapper -- system_u:object_r:mozilla_exec_t
+-/usr/lib/mozilla/reg.+	--	system_u:object_r:mozilla_exec_t
+-/usr/lib/mozilla/mozilla-.* --	system_u:object_r:mozilla_exec_t
+-/usr/lib/mozilla-snapshot/reg.+	 --	system_u:object_r:mozilla_exec_t
+-/usr/lib/mozilla-snapshot/mozilla-.* --	system_u:object_r:mozilla_exec_t
++/usr/lib(64)?/netscape/.+/communicator/communicator-smotif.real -- system_u:object_r:mozilla_exec_t
++/usr/lib(64)?/netscape/base-4/wrapper -- system_u:object_r:mozilla_exec_t
++/usr/lib(64)?/mozilla/reg.+	--	system_u:object_r:mozilla_exec_t
++/usr/lib(64)?/mozilla/mozilla-.* --	system_u:object_r:mozilla_exec_t
++/usr/lib(64)?/mozilla-snapshot/reg.+	 --	system_u:object_r:mozilla_exec_t
++/usr/lib(64)?/mozilla-snapshot/mozilla-.* --	system_u:object_r:mozilla_exec_t
+--- policy-1.6/file_contexts/program/rpm.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/rpm.fc	2004-02-21 08:26:24.847385329 -0500
+@@ -1,6 +1,6 @@
+ # rpm
+-/var/lib/rpm(/.*)?		system_u:object_r:rpm_var_lib_t
+-/var/lib/alternatives(/.*)?	system_u:object_r:rpm_var_lib_t
++/var/lib(64)?/rpm(/.*)?		system_u:object_r:rpm_var_lib_t
++/var/lib(64)?/alternatives(/.*)?	system_u:object_r:rpm_var_lib_t
+ /bin/rpm 		--	system_u:object_r:rpm_exec_t
+ /var/log/rpmpkgs.*	--	system_u:object_r:rpm_log_t
+ /usr/share/redhat-config-network(/netconfig)?/[^/]+.py -- system_u:object_r:bin_t
+--- policy-1.6/file_contexts/program/ipsec.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/ipsec.fc	2004-02-21 08:26:24.770394108 -0500
+@@ -3,16 +3,16 @@
+ /etc/ipsec\.secrets	--	system_u:object_r:ipsec_key_file_t
+ /etc/ipsec\.conf	--	system_u:object_r:ipsec_conf_file_t
+ /etc/ipsec\.d(/.*)?		system_u:object_r:ipsec_key_file_t
+-/usr/lib/ipsec/.*	--	system_u:object_r:ipsec_mgmt_exec_t
+-/usr/local/lib/ipsec/.*	--	system_u:object_r:ipsec_mgmt_exec_t
+-/usr/lib/ipsec/eroute	--	system_u:object_r:ipsec_exec_t
+-/usr/local/lib/ipsec/eroute --	system_u:object_r:ipsec_exec_t
+-/usr/lib/ipsec/klipsdebug --	system_u:object_r:ipsec_exec_t
+-/usr/local/lib/ipsec/klipsdebug -- system_u:object_r:ipsec_exec_t
+-/usr/lib/ipsec/pluto	--	system_u:object_r:ipsec_exec_t
+-/usr/local/lib/ipsec/pluto --	system_u:object_r:ipsec_exec_t
+-/usr/lib/ipsec/spi	--	system_u:object_r:ipsec_exec_t
+-/usr/local/lib/ipsec/spi --	system_u:object_r:ipsec_exec_t
++/usr/lib(64)?/ipsec/.*	--	system_u:object_r:ipsec_mgmt_exec_t
++/usr/local/lib(64)?/ipsec/.*	--	system_u:object_r:ipsec_mgmt_exec_t
++/usr/lib(64)?/ipsec/eroute	--	system_u:object_r:ipsec_exec_t
++/usr/local/lib(64)?/ipsec/eroute --	system_u:object_r:ipsec_exec_t
++/usr/lib(64)?/ipsec/klipsdebug --	system_u:object_r:ipsec_exec_t
++/usr/local/lib(64)?/ipsec/klipsdebug -- system_u:object_r:ipsec_exec_t
++/usr/lib(64)?/ipsec/pluto	--	system_u:object_r:ipsec_exec_t
++/usr/local/lib(64)?/ipsec/pluto --	system_u:object_r:ipsec_exec_t
++/usr/lib(64)?/ipsec/spi	--	system_u:object_r:ipsec_exec_t
++/usr/local/lib(64)?/ipsec/spi --	system_u:object_r:ipsec_exec_t
+ /usr/sbin/ipsec		--	system_u:object_r:ipsec_mgmt_exec_t
+ /usr/local/sbin/ipsec	--	system_u:object_r:ipsec_mgmt_exec_t
+ /var/run/ipsec\.info		system_u:object_r:ipsec_var_run_t
+--- policy-1.6/file_contexts/program/slapd.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/slapd.fc	2004-02-21 08:26:24.851384873 -0500
+@@ -1,8 +1,8 @@
+ # slapd - ldap server
+ /usr/sbin/slapd		--	system_u:object_r:slapd_exec_t
+-/var/lib/ldap(/.*)?		system_u:object_r:slapd_db_t
+-/var/lib/ldap/replog(/.*)?	system_u:object_r:slapd_replog_t
++/var/lib(64)?/ldap(/.*)?		system_u:object_r:slapd_db_t
++/var/lib(64)?/ldap/replog(/.*)?	system_u:object_r:slapd_replog_t
+ /var/run/slapd\.args	--	system_u:object_r:slapd_var_run_t
+ /etc/ldap/slapd\.conf	--	system_u:object_r:etc_slapd_t
+-/usr/lib/ldap/back.*so.* --	system_u:object_r:shlib_t
++/usr/lib(64)?/ldap/back.*so.* --	system_u:object_r:shlib_t
+ /var/run/slapd\.pid	--	system_u:object_r:slapd_var_run_t
+--- policy-1.6/file_contexts/program/crack.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/crack.fc	2004-02-21 08:26:24.843385785 -0500
+@@ -1,4 +1,4 @@
+ # crack - for password checking
+ /usr/sbin/crack_[a-z]*	--	system_u:object_r:crack_exec_t
+ /var/cache/cracklib(/.*)?	system_u:object_r:crack_db_t
+-/usr/lib/cracklib_dict.* --	system_u:object_r:crack_db_t
++/usr/lib(64)?/cracklib_dict.* --	system_u:object_r:crack_db_t
+--- policy-1.6/file_contexts/program/clamav.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/clamav.fc	2004-02-21 08:26:25.010366745 -0500
+@@ -3,7 +3,7 @@
+ /usr/bin/freshclam	--	system_u:object_r:freshclam_exec_t
+ /usr/sbin/clamav-freshclam-handledaemon	-- system_u:object_r:freshclam_exec_t
+ /usr/sbin/clamd		--	system_u:object_r:clamd_exec_t
+-/var/lib/clamav(/.*)?		system_u:object_r:clamav_var_lib_t
++/var/lib(64)?/clamav(/.*)?		system_u:object_r:clamav_var_lib_t
+ /var/log/clam-update.log --	system_u:object_r:freshclam_log_t
+ /var/log/clamav-freshclam.log.* -- system_u:object_r:freshclam_log_t
+ /var/run/clamd.ctl	-s	system_u:object_r:clamd_var_run_t
+--- policy-1.6/file_contexts/program/jabberd.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/jabberd.fc	2004-02-21 08:26:24.647408132 -0500
+@@ -1,3 +1,3 @@
+ # jabberd
+ /usr/sbin/jabberd		system_u:object_r:jabberd_exec_t
+-/var/lib/jabber			system_u:object_r:jabberd_var_lib_t
++/var/lib(64)?/jabber			system_u:object_r:jabberd_var_lib_t
+--- policy-1.6/file_contexts/program/openca-common.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/openca-common.fc	2004-02-21 08:26:25.208344170 -0500
+@@ -1,7 +1,7 @@
+ /etc/openca(/.*)?			system_u:object_r:openca_etc_t
+ /etc/openca/rbac(/.*)?			system_u:object_r:openca_etc_writeable_t
+ /etc/openca/*.\.in(/.*)?		system_u:object_r:openca_etc_in_t
+-/var/lib/openca(/.*)?			system_u:object_r:openca_var_lib_t
+-/var/lib/openca/crypto/keys(/.*)?	system_u:object_r:openca_var_lib_keys_t
++/var/lib(64)?/openca(/.*)?			system_u:object_r:openca_var_lib_t
++/var/lib(64)?/openca/crypto/keys(/.*)?	system_u:object_r:openca_var_lib_keys_t
+ /usr/share/openca(/.*)?			system_u:object_r:openca_usr_share_t
+ /usr/share/openca/htdocs(/.*)?		system_u:object_r:httpd_sys_content_t
+--- policy-1.6/file_contexts/program/dictd.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/dictd.fc	2004-02-21 08:26:24.784392512 -0500
+@@ -1,4 +1,4 @@
+ # dictd
+ /etc/dictd.conf		--	system_u:object_r:etc_dictd_t
+ /usr/sbin/dictd		--	system_u:object_r:dictd_exec_t
+-/var/lib/dictd(/.*)?		system_u:object_r:var_lib_dictd_t
++/var/lib(64)?/dictd(/.*)?		system_u:object_r:var_lib_dictd_t
+--- policy-1.6/file_contexts/program/logrotate.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/logrotate.fc	2004-02-21 08:26:24.775393538 -0500
+@@ -2,7 +2,7 @@
+ /usr/sbin/logrotate	--	system_u:object_r:logrotate_exec_t
+ /usr/sbin/logcheck	--	system_u:object_r:logrotate_exec_t
+ /etc/cron\.(daily|weekly)/sysklogd -- system_u:object_r:logrotate_exec_t
+-/var/lib/logrotate.status --	system_u:object_r:logrotate_var_lib_t
+-/var/lib/logcheck(/.*)?		system_u:object_r:logrotate_var_lib_t
++/var/lib(64)?/logrotate.status --	system_u:object_r:logrotate_var_lib_t
++/var/lib(64)?/logcheck(/.*)?		system_u:object_r:logrotate_var_lib_t
+ # using a hard-coded name under /var/tmp is a bug - new version fixes it
+ /var/tmp/logcheck	-d	system_u:object_r:logrotate_tmp_t
+--- policy-1.6/file_contexts/program/anaconda.fc.20040222	2004-02-21 08:29:36.875489003 -0500
++++ policy-1.6/file_contexts/program/anaconda.fc	2004-02-21 08:30:47.153475438 -0500
+@@ -0,0 +1,5 @@
++#
++# Anaconda file context
++# currently anaconda does not have any file context since it is started during install
++# This is a placeholder to stop makefile from complaining
++#
+--- policy-1.6/file_contexts/program/oav-update.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/oav-update.fc	2004-02-21 08:26:25.014366289 -0500
+@@ -1,4 +1,4 @@
+-/var/lib/oav-virussignatures -- system_u:object_r:oav_update_var_lib_t
+-/var/lib/oav-update(/.*)?	system_u:object_r:oav_update_var_lib_t
++/var/lib(64)?/oav-virussignatures -- system_u:object_r:oav_update_var_lib_t
++/var/lib(64)?/oav-update(/.*)?	system_u:object_r:oav_update_var_lib_t
+ /usr/sbin/oav-update	--	system_u:object_r:oav_update_exec_t
+ /etc/oav-update(/.*)?		system_u:object_r:oav_update_etc_t
+--- policy-1.6/file_contexts/program/nsd.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/nsd.fc	2004-02-21 08:26:25.005367315 -0500
+@@ -3,7 +3,7 @@
+ /etc/nsd/primary(/.*)?		system_u:object_r:nsd_zone_t
+ /etc/nsd/secondary(/.*)?	system_u:object_r:nsd_zone_t
+ /etc/nsd/nsd.db		--	system_u:object_r:nsd_zone_t
+-/var/lib/nsd(/.*)?		system_u:object_r:nsd_zone_t
++/var/lib(64)?/nsd(/.*)?		system_u:object_r:nsd_zone_t
+ /usr/sbin/nsd      	--	system_u:object_r:nsd_exec_t
+ /usr/sbin/nsdc      	--	system_u:object_r:nsd_exec_t
+ /usr/sbin/nsd-notify	--	system_u:object_r:nsd_exec_t
+--- policy-1.6/file_contexts/program/lrrd.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/lrrd.fc	2004-02-21 08:26:24.836386583 -0500
+@@ -5,6 +5,6 @@
+ /usr/share/lrrd/plugins/.*	--	system_u:object_r:lrrd_exec_t
+ /var/run/lrrd(/.*)?			system_u:object_r:lrrd_var_run_t
+ /var/log/lrrd.*			--	system_u:object_r:lrrd_log_t
+-/var/lib/lrrd(/.*)?			system_u:object_r:lrrd_var_lib_t
++/var/lib(64)?/lrrd(/.*)?			system_u:object_r:lrrd_var_lib_t
+ /var/www/lrrd(.*)?			system_u:object_r:lrrd_var_lib_t
+ /etc/lrrd(/.*)?				system_u:object_r:etc_lrrd_t
+--- policy-1.6/file_contexts/program/ddt-client.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/ddt-client.fc	2004-02-21 08:26:24.786392284 -0500
+@@ -2,5 +2,5 @@
+ /usr/sbin/ddtcd		--	system_u:object_r:ddt_client_exec_t
+ /var/run/ddtcd\.pid	--	system_u:object_r:ddt_client_var_run_t
+ /etc/ddtcd\.conf	--	system_u:object_r:etc_ddt_client_t
+-/var/lib/ddt-client(/.*)?	system_u:object_r:var_lib_ddt_client_t
++/var/lib(64)?/ddt-client(/.*)?	system_u:object_r:var_lib_ddt_client_t
+ /var/log/ddtcd\.log.*	--	system_u:object_r:var_log_ddt_client_t
+--- policy-1.6/file_contexts/program/nessusd.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/nessusd.fc	2004-02-21 08:26:24.639409044 -0500
+@@ -1,6 +1,6 @@
+ # nessusd - network scanning server
+ /usr/sbin/nessusd	--	system_u:object_r:nessusd_exec_t
+-/usr/lib/nessus/plugins/.* --	system_u:object_r:nessusd_exec_t
+-/var/lib/nessus(/.*)?	 	system_u:object_r:nessusd_db_t
++/usr/lib(64)?/nessus/plugins/.* --	system_u:object_r:nessusd_exec_t
++/var/lib(64)?/nessus(/.*)?	 	system_u:object_r:nessusd_db_t
+ /var/log/nessus(/.*)?		system_u:object_r:nessusd_log_t
+ /etc/nessus/nessusd\.conf --	system_u:object_r:etc_nessusd_t
+--- policy-1.6/file_contexts/program/xdm.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/xdm.fc	2004-02-21 08:26:24.644408474 -0500
+@@ -16,4 +16,19 @@
+ /etc/X11/xdm/Xsession	--	system_u:object_r:xsession_exec_t
+ /var/run/xdmctl(/.*)?		system_u:object_r:xdm_var_run_t
+ /var/run/console.*		system_u:object_r:xdm_var_run_t
+-/var/lib/kdm(/.*)?		system_u:object_r:xdm_var_lib_t
++/var/lib(64)?/kdm(/.*)?		system_u:object_r:xdm_var_lib_t
++
++#
++# Additional Xsession scripts
++#
++/etc/X11/xdm/GiveConsole	--	system_u:object_r:bin_t
++/etc/X11/xdm/TakeConsole	--	system_u:object_r:bin_t
++/etc/X11/xdm/Xsetup_0		--	system_u:object_r:bin_t
++/etc/X11/xinit(/.*)?			system_u:object_r:bin_t
++#
++# Rules for kde login
++#
++/etc/kde/kdm/Xstartup   --		system_u:object_r:bin_t
++/etc/kde/kdm/Xreset     --		system_u:object_r:bin_t
++/etc/kde/kdm/backgroundrc	system_u:object_r:xdm_var_run_t
++/usr/lib(64)?/qt-3.2/etc/settings(/.*)?	system_u:object_r:xdm_var_run_t
+--- policy-1.6/file_contexts/program/ircd.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/ircd.fc	2004-02-21 08:26:24.834386811 -0500
+@@ -2,5 +2,5 @@
+ /usr/sbin/(dancer-)?ircd --	system_u:object_r:ircd_exec_t
+ /etc/(dancer-)?ircd(/.*)?	system_u:object_r:etc_ircd_t
+ /var/log/(dancer-)?ircd(/.*)?	system_u:object_r:ircd_log_t
+-/var/lib/dancer-ircd(/.*)?	system_u:object_r:ircd_var_lib_t
++/var/lib(64)?/dancer-ircd(/.*)?	system_u:object_r:ircd_var_lib_t
+ /var/run/dancer-ircd(/.*)?	system_u:object_r:ircd_var_run_t
+--- policy-1.6/file_contexts/program/mrtg.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/mrtg.fc	2004-02-21 08:26:24.855384417 -0500
+@@ -1,6 +1,6 @@
+ # mrtg - traffic grapher
+ /usr/bin/mrtg		--	system_u:object_r:mrtg_exec_t
+-/var/lib/mrtg(/.*)?		system_u:object_r:var_lib_mrtg_t
++/var/lib(64)?/mrtg(/.*)?		system_u:object_r:var_lib_mrtg_t
+ /var/lock/mrtg(/.*)?		system_u:object_r:mrtg_lock_t
+ /etc/mrtg.*			system_u:object_r:etc_mrtg_t
+ /etc/mrtg/mrtg.ok	--	system_u:object_r:mrtg_lock_t
+--- policy-1.6/file_contexts/program/apache.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/apache.fc	2004-02-21 08:26:24.773393766 -0500
+@@ -4,7 +4,7 @@
+ /var/www/html(/.*)?		system_u:object_r:httpd_sys_content_t
+ /var/www/mrtg(/.*)?		system_u:object_r:httpd_sys_content_t
+ /var/www/cgi-bin(/.*)?		system_u:object_r:httpd_sys_script_exec_t
+-/usr/lib/cgi-bin(/.*)?		system_u:object_r:httpd_sys_script_exec_t
++/usr/lib(64)?/cgi-bin(/.*)?		system_u:object_r:httpd_sys_script_exec_t
+ /var/www/perl(/.*)?		system_u:object_r:httpd_sys_script_exec_t
+ /var/www/icons(/.*)?		system_u:object_r:httpd_sys_content_t
+ /var/cache/httpd(/.*)?		system_u:object_r:httpd_cache_t
+@@ -14,14 +14,14 @@
+ /etc/httpd/modules		system_u:object_r:httpd_modules_t
+ /etc/apache(2)?(/.*)?		system_u:object_r:httpd_config_t
+ /etc/vhosts		--	system_u:object_r:httpd_config_t
+-/usr/lib/apache(/.*)?		system_u:object_r:httpd_modules_t
+-/usr/lib/apache2/modules(/.*)?	system_u:object_r:httpd_modules_t
+-/usr/lib/httpd(/.*)?		system_u:object_r:httpd_modules_t
++/usr/lib(64)?/apache(/.*)?		system_u:object_r:httpd_modules_t
++/usr/lib(64)?/apache2/modules(/.*)?	system_u:object_r:httpd_modules_t
++/usr/lib(64)?/httpd(/.*)?		system_u:object_r:httpd_modules_t
+ /usr/sbin/httpd		--	system_u:object_r:httpd_exec_t
+ /usr/sbin/apache(2)?	--	system_u:object_r:httpd_exec_t
+ /usr/sbin/suexec	--	system_u:object_r:httpd_suexec_exec_t
+-/usr/lib/cgi-bin/(nph-)?cgiwrap(d)? -- system_u:object_r:httpd_suexec_exec_t
+-/usr/lib/apache(2)?/suexec(2)? -- system_u:object_r:httpd_suexec_exec_t
++/usr/lib(64)?/cgi-bin/(nph-)?cgiwrap(d)? -- system_u:object_r:httpd_suexec_exec_t
++/usr/lib(64)?/apache(2)?/suexec(2)? -- system_u:object_r:httpd_suexec_exec_t
+ /var/log/httpd(/.*)?		system_u:object_r:httpd_log_t
+ /var/log/apache(2)?(/.*)?	system_u:object_r:httpd_log_t
+ /var/log/cgiwrap.log.*	--	system_u:object_r:httpd_log_t
+--- policy-1.6/file_contexts/program/openca-ca.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/openca-ca.fc	2004-02-21 08:26:24.848385215 -0500
+@@ -1,8 +1,8 @@
+ /etc/openca(/.*)?		system_u:object_r:openca_etc_t
+ /etc/openca/rbac(/.*)?		system_u:object_r:openca_etc_writeable_t
+ /etc/openca/*.\.in(/.*)?	system_u:object_r:openca_etc_in_t
+-/var/lib/openca(/.*)?		system_u:object_r:openca_var_lib_t
+-/var/lib/openca/crypto/keys(/.*)?	system_u:object_r:openca_var_lib_keys_t
++/var/lib(64)?/openca(/.*)?		system_u:object_r:openca_var_lib_t
++/var/lib(64)?/openca/crypto/keys(/.*)?	system_u:object_r:openca_var_lib_keys_t
+ /usr/share/openca(/.*)?		system_u:object_r:openca_usr_share_t
+ /usr/share/openca/htdocs(/.*)?	system_u:object_r:httpd_sys_content_t
+ /usr/share/openca/cgi-bin/ca(/.*)?	system_u:object_r:openca_ca_exec_t
+--- policy-1.6/file_contexts/program/dhcpd.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/dhcpd.fc	2004-02-21 08:26:24.768394336 -0500
+@@ -2,10 +2,10 @@
+ /etc/dhcpd.conf		--	system_u:object_r:etc_dhcp_t
+ /etc/dhcp3(/.*)?		system_u:object_r:etc_dhcp_t
+ /usr/sbin/dhcpd.*	--	system_u:object_r:dhcpd_exec_t
+-/var/lib/dhcp(3)?/dhcpd\.leases.* -- system_u:object_r:dhcpd_state_t
++/var/lib(64)?/dhcp(3)?/dhcpd\.leases.* -- system_u:object_r:dhcpd_state_t
+ /var/run/dhcpd\.pid	-d	system_u:object_r:dhcpd_var_run_t
+ ifdef(`dhcp', `'
+ , `
+-/var/lib/dhcp(3)?	-d	system_u:object_r:dhcp_state_t
++/var/lib(64)?/dhcp(3)?	-d	system_u:object_r:dhcp_state_t
+ define(`dhcp')
+ ')
+\ No newline at end of file
+--- policy-1.6/file_contexts/program/rlogind.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/rlogind.fc	2004-02-21 08:26:24.845385557 -0500
+@@ -1,6 +1,6 @@
+ # rlogind and telnetd
+ /usr/sbin/in\.rlogind	--	system_u:object_r:rlogind_exec_t
+ /usr/sbin/in\.telnetd	--	system_u:object_r:rlogind_exec_t
+-/usr/lib/telnetlogin	--	system_u:object_r:rlogind_exec_t
++/usr/lib(64)?/telnetlogin	--	system_u:object_r:rlogind_exec_t
+ /usr/kerberos/sbin/klogind --	system_u:object_r:rlogind_exec_t
+ /usr/kerberos/sbin/telnetd --	system_u:object_r:rlogind_exec_t
+--- policy-1.6/file_contexts/program/postfix.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/postfix.fc	2004-02-21 08:26:24.853384645 -0500
+@@ -2,17 +2,17 @@
+ /etc/postfix(/.*)?		system_u:object_r:etc_postfix_t
+ /etc/postfix/postfix-script.* -- system_u:object_r:postfix_exec_t
+ /etc/postfix/prng_exch	--	system_u:object_r:postfix_prng_t
+-/usr/lib/postfix/.*	--	system_u:object_r:postfix_exec_t
+-/usr/lib/postfix/cleanup --	system_u:object_r:postfix_cleanup_exec_t
+-/usr/lib/postfix/local	--	system_u:object_r:postfix_local_exec_t
+-/usr/lib/postfix/master	--	system_u:object_r:postfix_master_exec_t
+-/usr/lib/postfix/pickup	--	system_u:object_r:postfix_pickup_exec_t
+-/usr/lib/postfix/(n)?qmgr --	system_u:object_r:postfix_qmgr_exec_t
+-/usr/lib/postfix/showq	--	system_u:object_r:postfix_showq_exec_t
+-/usr/lib/postfix/smtp	--	system_u:object_r:postfix_smtp_exec_t
+-/usr/lib/postfix/smtpd	--	system_u:object_r:postfix_smtpd_exec_t
+-/usr/lib/postfix/bounce	--	system_u:object_r:postfix_bounce_exec_t
+-/usr/lib/postfix/pipe	--	system_u:object_r:postfix_pipe_exec_t
++/usr/lib(64)?/postfix/.*	--	system_u:object_r:postfix_exec_t
++/usr/lib(64)?/postfix/cleanup --	system_u:object_r:postfix_cleanup_exec_t
++/usr/lib(64)?/postfix/local	--	system_u:object_r:postfix_local_exec_t
++/usr/lib(64)?/postfix/master	--	system_u:object_r:postfix_master_exec_t
++/usr/lib(64)?/postfix/pickup	--	system_u:object_r:postfix_pickup_exec_t
++/usr/lib(64)?/postfix/(n)?qmgr --	system_u:object_r:postfix_qmgr_exec_t
++/usr/lib(64)?/postfix/showq	--	system_u:object_r:postfix_showq_exec_t
++/usr/lib(64)?/postfix/smtp	--	system_u:object_r:postfix_smtp_exec_t
++/usr/lib(64)?/postfix/smtpd	--	system_u:object_r:postfix_smtpd_exec_t
++/usr/lib(64)?/postfix/bounce	--	system_u:object_r:postfix_bounce_exec_t
++/usr/lib(64)?/postfix/pipe	--	system_u:object_r:postfix_pipe_exec_t
+ /usr/sbin/postalias	--	system_u:object_r:postfix_master_exec_t
+ /usr/sbin/postcat	--	system_u:object_r:postfix_master_exec_t
+ /usr/sbin/postconf	--	system_u:object_r:postfix_master_exec_t
+@@ -38,9 +38,9 @@
+ /var/spool/postfix/bounce(/.*)? system_u:object_r:postfix_spool_bounce_t
+ /var/spool/postfix/flush(/.*)?	system_u:object_r:postfix_spool_flush_t
+ /var/spool/postfix/etc(/.*)?	system_u:object_r:etc_t
+-/var/spool/postfix/lib(/.*)?	system_u:object_r:lib_t
++/var/spool/postfix/lib(64)?(/.*)?	system_u:object_r:lib_t
+ /var/spool/postfix/usr(/.*)?	system_u:object_r:lib_t
+-/var/spool/postfix/lib/ld.*\.so.* -- system_u:object_r:ld_so_t
+-/var/spool/postfix/lib/lib.*\.so.* -- system_u:object_r:shlib_t
+-/var/spool/postfix/lib/[^/]*/lib.*\.so.* -- system_u:object_r:shlib_t
+-/var/spool/postfix/lib/devfsd/.*\.so.* -- system_u:object_r:shlib_t
++/var/spool/postfix/lib(64)?/ld.*\.so.* -- system_u:object_r:ld_so_t
++/var/spool/postfix/lib(64)?/lib.*\.so.* -- system_u:object_r:shlib_t
++/var/spool/postfix/lib(64)?/[^/]*/lib.*\.so.* -- system_u:object_r:shlib_t
++/var/spool/postfix/lib(64)?/devfsd/.*\.so.* -- system_u:object_r:shlib_t
+--- /dev/null	2004-01-21 11:12:15.000000000 -0500
++++ policy-1.6/file_contexts/program/uml.fc	2004-02-21 08:26:25.012366517 -0500
+@@ -0,0 +1,4 @@
++# User Mode Linux
++/usr/bin/uml_switch	--	system_u:object_r:uml_switch_exec_t
++/var/run/uml-utilities(/.*)?	system_u:object_r:uml_switch_var_run_t
++/home/[^/]+/.uml(/.*)?		system_u:object_r:user_uml_rw_t
+--- policy-1.6/file_contexts/program/cups.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/cups.fc	2004-02-21 08:26:24.776393424 -0500
+@@ -9,12 +9,12 @@
+ /etc/cups/certs/.*	--	system_u:object_r:etc_cupsd_rw_t
+ /etc/cups/ppds.dat	--	system_u:object_r:etc_cupsd_rw_t
+ /etc/printcap\.cups	--	system_u:object_r:etc_cupsd_t
+-/usr/lib/cups/backend/.* --	system_u:object_r:cupsd_exec_t
+-/usr/lib/cups/daemon/.*	 --	system_u:object_r:cupsd_exec_t
++/usr/lib(64)?/cups/backend/.* --	system_u:object_r:cupsd_exec_t
++/usr/lib(64)?/cups/daemon/.*	 --	system_u:object_r:cupsd_exec_t
+ /usr/sbin/cupsd		--	system_u:object_r:cupsd_exec_t
+ /usr/sbin/printconf-backend --	system_u:object_r:cupsd_exec_t
+ /var/log/cups(/.*)?		system_u:object_r:cupsd_log_t
+ /var/spool/cups(/.*)?		system_u:object_r:print_spool_t
+ /var/run/cups/printcap	--	system_u:object_r:cupsd_var_run_t
+-/usr/lib/cups/filter/.*	--	system_u:object_r:bin_t
+-/usr/lib/cups/cgi-bin/.* --	system_u:object_r:bin_t
++/usr/lib(64)?/cups/filter/.*	--	system_u:object_r:bin_t
++/usr/lib(64)?/cups/cgi-bin/.* --	system_u:object_r:bin_t
+--- policy-1.6/file_contexts/program/dhcpc.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/dhcpc.fc	2004-02-21 08:26:24.839386241 -0500
+@@ -4,12 +4,12 @@
+ /etc/dhclient-script	--	system_u:object_r:etc_dhcp_t
+ /sbin/dhcpcd		--	system_u:object_r:dhcpc_exec_t
+ /sbin/dhclient.*	--	system_u:object_r:dhcpc_exec_t
+-/var/lib/dhcp(3)?/dhclient.*	system_u:object_r:dhcpc_state_t
++/var/lib(64)?/dhcp(3)?/dhclient.*	system_u:object_r:dhcpc_state_t
+ /var/run/dhclient.*\.pid --	system_u:object_r:dhcpc_var_run_t
+ # pump
+ /sbin/pump		--	system_u:object_r:dhcpc_exec_t
+ ifdef(`dhcp', `'
+ , `
+-/var/lib/dhcp(3)?	-d	system_u:object_r:dhcp_state_t
++/var/lib(64)?/dhcp(3)?	-d	system_u:object_r:dhcp_state_t
+ define(`dhcp')
+ ')
+--- policy-1.6/file_contexts/program/lvm.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/program/lvm.fc	2004-02-21 08:26:25.018365833 -0500
+@@ -13,6 +13,6 @@
+ /var/lock/lvm(/.*)?		system_u:object_r:lvm_lock_t
+ /dev/lvm		-c	system_u:object_r:fixed_disk_device_t
+ /dev/mapper/.*		-b	system_u:object_r:fixed_disk_device_t
+-/lib/lvm-10(/.*)		system_u:object_r:lvm_exec_t
+-/lib/lvm-200(/.*)		system_u:object_r:lvm_exec_t
+-/lib/lvm-default		system_u:object_r:bin_t
++/lib(64)?/lvm-10(/.*)		system_u:object_r:lvm_exec_t
++/lib(64)?/lvm-200(/.*)		system_u:object_r:lvm_exec_t
++/lib(64)?/lvm-default		system_u:object_r:bin_t
+--- policy-1.6/file_contexts/types.fc.20040222	2004-02-21 07:42:05.000000000 -0500
++++ policy-1.6/file_contexts/types.fc	2004-02-21 08:26:25.212343714 -0500
+@@ -54,9 +54,9 @@
+ /var/catman(/.*)?		system_u:object_r:catman_t
+ /var/cache/man(/.*)?		system_u:object_r:catman_t
+ /var/yp(/.*)?			system_u:object_r:var_yp_t
+-/var/lib(/.*)?			system_u:object_r:var_lib_t
+-/var/lib/nfs(/.*)?		system_u:object_r:var_lib_nfs_t
+-/var/lib/texmf(/.*)?		system_u:object_r:tetex_data_t
++/var/lib(64)?(/.*)?			system_u:object_r:var_lib_t
++/var/lib(64)?/nfs(/.*)?		system_u:object_r:var_lib_nfs_t
++/var/lib(64)?/texmf(/.*)?		system_u:object_r:tetex_data_t
+ /var/cache/fonts(/.*)?		system_u:object_r:tetex_data_t
+ /var/lock(/.*)?			system_u:object_r:var_lock_t
+ /var/tmp		-d	system_u:object_r:tmp_t
+@@ -68,9 +68,9 @@
+ #
+ /var/ftp/bin(/.*)?		system_u:object_r:bin_t
+ /var/ftp/bin/ls		--	system_u:object_r:ls_exec_t
+-/var/ftp/lib(/.*)?		system_u:object_r:lib_t
+-/var/ftp/lib/ld.*\.so.* --	system_u:object_r:ld_so_t
+-/var/ftp/lib/lib.*\.so.* --	system_u:object_r:shlib_t
++/var/ftp/lib(64)?(/.*)?		system_u:object_r:lib_t
++/var/ftp/lib(64)?/ld.*\.so.* --	system_u:object_r:ld_so_t
++/var/ftp/lib(64)?/lib.*\.so.* --	system_u:object_r:shlib_t
+ /var/ftp/etc(/.*)?		system_u:object_r:etc_t
+ 
+ # 
+@@ -106,108 +106,109 @@
+ /boot/kernel\.h.*	--	system_u:object_r:boot_runtime_t
+ 
+ #
+-# /dev
++# /u?dev
+ #
+-/dev(/.*)?			system_u:object_r:device_t
+-/dev/pts(/.*)?			<<none>>
+-/dev/cpu/.*		-c	system_u:object_r:cpu_device_t
+-/dev/MAKEDEV		--	system_u:object_r:sbin_t
+-/dev/null		-c	system_u:object_r:null_device_t
+-/dev/full		-c	system_u:object_r:null_device_t
+-/dev/zero		-c	system_u:object_r:zero_device_t
+-/dev/console		-c	system_u:object_r:console_device_t
+-/dev/(kmem|mem|port)	-c	system_u:object_r:memory_device_t
+-/dev/nvram		-c	system_u:object_r:memory_device_t
+-/dev/random		-c	system_u:object_r:random_device_t
+-/dev/urandom		-c	system_u:object_r:urandom_device_t
+-/dev/.*tty[^/]*		-c	system_u:object_r:tty_device_t
+-/dev/cu.*		-c	system_u:object_r:tty_device_t
+-/dev/vcs[^/]*		-c	system_u:object_r:tty_device_t
+-/dev/ip2[^/]*		-c	system_u:object_r:tty_device_t
+-/dev/tty		-c	system_u:object_r:devtty_t
+-/dev/[shmx]d[^/]*	-b	system_u:object_r:fixed_disk_device_t
+-/dev/sg[0-9]+		-c	system_u:object_r:scsi_generic_device_t
+-/dev/rd.*		-b	system_u:object_r:fixed_disk_device_t
+-/dev/i2o/hd[^/]*	-b	system_u:object_r:fixed_disk_device_t
+-/dev/ubd[^/]*		-b	system_u:object_r:fixed_disk_device_t
+-/dev/cciss/[^/]*	-b	system_u:object_r:fixed_disk_device_t
+-/dev/ida/[^/]*		-b	system_u:object_r:fixed_disk_device_t
+-/dev/dasd[^/]*		-b	system_u:object_r:fixed_disk_device_t
+-/dev/flash[^/]*		-b	system_u:object_r:fixed_disk_device_t
+-/dev/nb[^/]+		-b	system_u:object_r:fixed_disk_device_t
+-/dev/ataraid/.*		-b	system_u:object_r:fixed_disk_device_t
+-/dev/loop.*		-b	system_u:object_r:fixed_disk_device_t
+-/dev/ram.*		-b	system_u:object_r:fixed_disk_device_t
+-/dev/rawctl		-c	system_u:object_r:fixed_disk_device_t
+-/dev/raw/raw[0-9]+	-c	system_u:object_r:fixed_disk_device_t
+-/dev/initrd		-b	system_u:object_r:fixed_disk_device_t
+-/dev/jsfd		-b	system_u:object_r:fixed_disk_device_t
+-/dev/jsflash		-c	system_u:object_r:fixed_disk_device_t
+-/dev/s(cd|r)[^/]*	-b	system_u:object_r:removable_device_t
+-/dev/usb/rio500		-c	system_u:object_r:removable_device_t
+-/dev/fd[^/]+		-b	system_u:object_r:removable_device_t
++/u?dev(/.*)?			system_u:object_r:device_t
++/u?dev/pts(/.*)?			<<none>>
++/u?dev/cpu/.*		-c	system_u:object_r:cpu_device_t
++/u?dev/MAKEDEV		--	system_u:object_r:sbin_t
++/u?dev/null		-c	system_u:object_r:null_device_t
++/u?dev/full		-c	system_u:object_r:null_device_t
++/u?dev/zero		-c	system_u:object_r:zero_device_t
++/u?dev/console		-c	system_u:object_r:console_device_t
++/u?dev/(kmem|mem|port)	-c	system_u:object_r:memory_device_t
++/u?dev/nvram		-c	system_u:object_r:memory_device_t
++/u?dev/random		-c	system_u:object_r:random_device_t
++/u?dev/urandom		-c	system_u:object_r:urandom_device_t
++/u?dev/.*tty[^/]*		-c	system_u:object_r:tty_device_t
++/u?dev/cu.*		-c	system_u:object_r:tty_device_t
++/u?dev/vcs[^/]*		-c	system_u:object_r:tty_device_t
++/u?dev/ip2[^/]*		-c	system_u:object_r:tty_device_t
++/u?dev/tty		-c	system_u:object_r:devtty_t
++/u?dev/[shmx]d[^/]*	-b	system_u:object_r:fixed_disk_device_t
++/u?dev/sg[0-9]+		-c	system_u:object_r:scsi_generic_device_t
++/u?dev/rd.*		-b	system_u:object_r:fixed_disk_device_t
++/u?dev/i2o/hd[^/]*	-b	system_u:object_r:fixed_disk_device_t
++/u?dev/ubd[^/]*		-b	system_u:object_r:fixed_disk_device_t
++/u?dev/cciss/[^/]*	-b	system_u:object_r:fixed_disk_device_t
++/u?dev/ida/[^/]*		-b	system_u:object_r:fixed_disk_device_t
++/u?dev/dasd[^/]*		-b	system_u:object_r:fixed_disk_device_t
++/u?dev/flash[^/]*		-b	system_u:object_r:fixed_disk_device_t
++/u?dev/nb[^/]+		-b	system_u:object_r:fixed_disk_device_t
++/u?dev/ataraid/.*		-b	system_u:object_r:fixed_disk_device_t
++/u?dev/loop.*		-b	system_u:object_r:fixed_disk_device_t
++/u?dev/ram.*		-b	system_u:object_r:fixed_disk_device_t
++/u?dev/rawctl		-c	system_u:object_r:fixed_disk_device_t
++/u?dev/raw/raw[0-9]+	-c	system_u:object_r:fixed_disk_device_t
++/u?dev/initrd		-b	system_u:object_r:fixed_disk_device_t
++/u?dev/jsfd		-b	system_u:object_r:fixed_disk_device_t
++/u?dev/jsflash		-c	system_u:object_r:fixed_disk_device_t
++/u?dev/s(cd|r)[^/]*	-b	system_u:object_r:removable_device_t
++/u?dev/usb/rio500		-c	system_u:object_r:removable_device_t
++/u?dev/fd[^/]+		-b	system_u:object_r:removable_device_t
+ # I think a parallel port disk is a removable device...
+-/dev/pd[a-d][^/]*	-b	system_u:object_r:removable_device_t
+-/dev/p[fg][0-3]		-b	system_u:object_r:removable_device_t
+-/dev/aztcd		-b	system_u:object_r:removable_device_t
+-/dev/bpcd		-b	system_u:object_r:removable_device_t
+-/dev/gscd		-b	system_u:object_r:removable_device_t
+-/dev/hitcd		-b	system_u:object_r:removable_device_t
+-/dev/pcd[0-3]		-b	system_u:object_r:removable_device_t
+-/dev/mcdx?		-b	system_u:object_r:removable_device_t
+-/dev/cdu.*		-b	system_u:object_r:removable_device_t
+-/dev/cm20.*		-b	system_u:object_r:removable_device_t
+-/dev/optcd		-b	system_u:object_r:removable_device_t
+-/dev/sbpcd.*		-b	system_u:object_r:removable_device_t
+-/dev/sjcd		-b	system_u:object_r:removable_device_t
+-/dev/sonycd		-b	system_u:object_r:removable_device_t
++/u?dev/pd[a-d][^/]*	-b	system_u:object_r:removable_device_t
++/u?dev/p[fg][0-3]		-b	system_u:object_r:removable_device_t
++/u?dev/aztcd		-b	system_u:object_r:removable_device_t
++/u?dev/bpcd		-b	system_u:object_r:removable_device_t
++/u?dev/gscd		-b	system_u:object_r:removable_device_t
++/u?dev/hitcd		-b	system_u:object_r:removable_device_t
++/u?dev/pcd[0-3]		-b	system_u:object_r:removable_device_t
++/u?dev/mcdx?		-b	system_u:object_r:removable_device_t
++/u?dev/cdu.*		-b	system_u:object_r:removable_device_t
++/u?dev/cm20.*		-b	system_u:object_r:removable_device_t
++/u?dev/optcd		-b	system_u:object_r:removable_device_t
++/u?dev/sbpcd.*		-b	system_u:object_r:removable_device_t
++/u?dev/sjcd		-b	system_u:object_r:removable_device_t
++/u?dev/sonycd		-b	system_u:object_r:removable_device_t
+ # parallel port ATAPI generic device
+-/dev/pg[0-3]		-c	system_u:object_r:removable_device_t
+-/dev/rtc		-c	system_u:object_r:clock_device_t
+-/dev/psaux		-c	system_u:object_r:mouse_device_t
+-/dev/atibm		-c	system_u:object_r:mouse_device_t
+-/dev/logibm		-c	system_u:object_r:mouse_device_t
+-/dev/.*mouse.*		-c	system_u:object_r:mouse_device_t
+-/dev/input/.*mouse.*	-c	system_u:object_r:mouse_device_t
+-/dev/input/mice		-c	system_u:object_r:mouse_device_t
+-/dev/input/js.*		-c	system_u:object_r:mouse_device_t
+-/dev/ptmx		-c	system_u:object_r:ptmx_t
+-/dev/sequencer			system_u:object_r:misc_device_t
+-/dev/fb[0-9]*		-c	system_u:object_r:framebuf_device_t
+-/dev/apm_bios		-c	system_u:object_r:apm_bios_t
+-/dev/cpu/mtrr		-c	system_u:object_r:mtrr_device_t
+-/dev/(radio|video|vbi|vtx).* -c	system_u:object_r:v4l_device_t
+-/dev/winradio.		-c	system_u:object_r:v4l_device_t
+-/dev/vttuner		-c	system_u:object_r:v4l_device_t
+-/dev/tlk[0-3]		-c	system_u:object_r:v4l_device_t
+-/dev/mixer.*		-c	system_u:object_r:sound_device_t
+-/dev/dsp.*		-c	system_u:object_r:sound_device_t
+-/dev/audio.*		-c	system_u:object_r:sound_device_t
+-/dev/r?midi.*		-c	system_u:object_r:sound_device_t
+-/dev/smpte.*		-c	system_u:object_r:sound_device_t
+-/dev/sndstat		-c	system_u:object_r:sound_device_t
+-/dev/beep		-c	system_u:object_r:sound_device_t
+-/dev/patmgr[01]		-c	system_u:object_r:sound_device_t
+-/dev/mpu401.*		-c	system_u:object_r:sound_device_t
+-/dev/srnd[0-7]		-c	system_u:object_r:sound_device_t
+-/dev/aload.*		-c	system_u:object_r:sound_device_t
+-/dev/amidi.*		-c	system_u:object_r:sound_device_t
+-/dev/amixer.*		-c	system_u:object_r:sound_device_t
+-/dev/snd/.*		-c	system_u:object_r:sound_device_t
+-/dev/n?[hs]t[0-9].*	-c	system_u:object_r:tape_device_t
+-/dev/(n?raw)?qft[0-3]	-c	system_u:object_r:tape_device_t
+-/dev/n?z?qft[0-3]	-c	system_u:object_r:tape_device_t
+-/dev/n?tpqic[12].*	-c	system_u:object_r:tape_device_t
+-/dev/ht[0-1]		-b	system_u:object_r:tape_device_t
+-/dev/n?osst[0-3].*	-c	system_u:object_r:tape_device_t
+-/dev/n?pt[0-9]+		-c	system_u:object_r:tape_device_t
+-/dev/usb/scanner.*	-c	system_u:object_r:scanner_device_t
+-/dev/usb/dc2xx.*	-c	system_u:object_r:scanner_device_t
+-/dev/usb/mdc800.*	-c	system_u:object_r:scanner_device_t
+-/dev/mmetfgrab		-c	system_u:object_r:scanner_device_t
++/u?dev/pg[0-3]		-c	system_u:object_r:removable_device_t
++/u?dev/rtc		-c	system_u:object_r:clock_device_t
++/u?dev/psaux		-c	system_u:object_r:mouse_device_t
++/u?dev/atibm		-c	system_u:object_r:mouse_device_t
++/u?dev/logibm		-c	system_u:object_r:mouse_device_t
++/u?dev/.*mouse.*		-c	system_u:object_r:mouse_device_t
++/u?dev/input/.*mouse.*	-c	system_u:object_r:mouse_device_t
++/u?dev/input/mice		-c	system_u:object_r:mouse_device_t
++/u?dev/input/js.*		-c	system_u:object_r:mouse_device_t
++/u?dev/ptmx		-c	system_u:object_r:ptmx_t
++/u?dev/sequencer			system_u:object_r:misc_device_t
++/u?dev/fb[0-9]*		-c	system_u:object_r:framebuf_device_t
++/u?dev/apm_bios		-c	system_u:object_r:apm_bios_t
++/u?dev/cpu/mtrr		-c	system_u:object_r:mtrr_device_t
++/u?dev/(radio|video|vbi|vtx).* -c	system_u:object_r:v4l_device_t
++/u?dev/winradio.		-c	system_u:object_r:v4l_device_t
++/u?dev/vttuner		-c	system_u:object_r:v4l_device_t
++/u?dev/tlk[0-3]		-c	system_u:object_r:v4l_device_t
++/u?dev/mixer.*		-c	system_u:object_r:sound_device_t
++/u?dev/dsp.*		-c	system_u:object_r:sound_device_t
++/u?dev/audio.*		-c	system_u:object_r:sound_device_t
++/u?dev/r?midi.*		-c	system_u:object_r:sound_device_t
++/u?dev/smpte.*		-c	system_u:object_r:sound_device_t
++/u?dev/sndstat		-c	system_u:object_r:sound_device_t
++/u?dev/beep		-c	system_u:object_r:sound_device_t
++/u?dev/patmgr[01]		-c	system_u:object_r:sound_device_t
++/u?dev/mpu401.*		-c	system_u:object_r:sound_device_t
++/u?dev/srnd[0-7]		-c	system_u:object_r:sound_device_t
++/u?dev/aload.*		-c	system_u:object_r:sound_device_t
++/u?dev/amidi.*		-c	system_u:object_r:sound_device_t
++/u?dev/amixer.*		-c	system_u:object_r:sound_device_t
++/u?dev/snd/.*		-c	system_u:object_r:sound_device_t
++/u?dev/n?[hs]t[0-9].*	-c	system_u:object_r:tape_device_t
++/u?dev/(n?raw)?qft[0-3]	-c	system_u:object_r:tape_device_t
++/u?dev/n?z?qft[0-3]	-c	system_u:object_r:tape_device_t
++/u?dev/n?tpqic[12].*	-c	system_u:object_r:tape_device_t
++/u?dev/ht[0-1]		-b	system_u:object_r:tape_device_t
++/u?dev/n?osst[0-3].*	-c	system_u:object_r:tape_device_t
++/u?dev/n?pt[0-9]+		-c	system_u:object_r:tape_device_t
++/u?dev/usb/scanner.*	-c	system_u:object_r:scanner_device_t
++/u?dev/usb/dc2xx.*	-c	system_u:object_r:scanner_device_t
++/u?dev/usb/mdc800.*	-c	system_u:object_r:scanner_device_t
++/u?dev/mmetfgrab		-c	system_u:object_r:scanner_device_t
+ 
+ /proc(/.*)?			<<none>>
+ /sys(/.*)?			<<none>>
++/selinux(/.*)?			<<none>>
+ /opt(/.*)?			system_u:object_r:usr_t
+ 
+ #
+@@ -237,17 +238,17 @@
+ /etc/services		--	system_u:object_r:etc_t
+ 
+ #
+-# /lib
++# /lib(64)?
+ #
+-/lib(/.*)?			system_u:object_r:lib_t
+-/lib/ld.*\.so.*		--	system_u:object_r:ld_so_t
+-/lib/tls/ld.*\.so.*	--	system_u:object_r:ld_so_t
+-/lib/lib.*\.so.*	--	system_u:object_r:shlib_t
+-/lib/[^/]*/lib.*\.so.*	--	system_u:object_r:shlib_t
+-/lib/devfsd/.*\.so.*	--	system_u:object_r:shlib_t
+-/lib/security/.*\.so.*	--	system_u:object_r:shlib_t
+-/lib/tls/i686/cmov/.*\.so.* --	system_u:object_r:shlib_t
+-/lib/libSegFault.so	--	system_u:object_r:lib_t
++/lib(64)?(/.*)?			system_u:object_r:lib_t
++/lib(64)?/ld.*\.so.*		--	system_u:object_r:ld_so_t
++/lib(64)?/tls/ld.*\.so.*	--	system_u:object_r:ld_so_t
++/lib(64)?/lib.*\.so.*	--	system_u:object_r:shlib_t
++/lib(64)?/[^/]*/lib.*\.so.*	--	system_u:object_r:shlib_t
++/lib(64)?/devfsd/.*\.so.*	--	system_u:object_r:shlib_t
++/lib(64)?/security/.*\.so.*	--	system_u:object_r:shlib_t
++/lib(64)?/tls/i686/cmov/.*\.so.* --	system_u:object_r:shlib_t
++/lib(64)?/libSegFault.so	--	system_u:object_r:lib_t
+ 
+ #
+ # /sbin
+@@ -280,43 +281,43 @@
+ /usr/bin(/.*)?			system_u:object_r:bin_t
+ 
+ #
+-# /usr/lib
++# /usr/lib(64)?
+ #
+-/usr/lib(/.*)?			system_u:object_r:lib_t
+-/usr/lib/lib.*\.so.*	--	system_u:object_r:shlib_t
+-/usr/lib/python.*\.so	--	system_u:object_r:shlib_t
+-/usr/lib/.*/lib[^/]*\.so.* --	system_u:object_r:shlib_t
+-/usr/lib/.*/.*\.so	--	system_u:object_r:shlib_t
+-/usr/lib/autofs/.*\.so	--	system_u:object_r:shlib_t
+-/usr/lib/perl5/man(/.*)?	system_u:object_r:man_t
+-/usr/lib/perl.*\.so	--	system_u:object_r:shlib_t
+-/usr/lib/selinux(/.*)?		system_u:object_r:policy_src_t
+-/usr/lib/emacsen-common/.*	system_u:object_r:bin_t
+-/usr/lib/.*/bin(/.*)?		system_u:object_r:bin_t
+-/usr/lib/gconv/.*\.so	--	system_u:object_r:shlib_t
++/usr/lib(64)?(/.*)?			system_u:object_r:lib_t
++/usr/lib(64)?/lib.*\.so.*	--	system_u:object_r:shlib_t
++/usr/lib(64)?/python.*\.so	--	system_u:object_r:shlib_t
++/usr/lib(64)?/.*/lib[^/]*\.so.* --	system_u:object_r:shlib_t
++/usr/lib(64)?/.*/.*\.so	--	system_u:object_r:shlib_t
++/usr/lib(64)?/autofs/.*\.so	--	system_u:object_r:shlib_t
++/usr/lib(64)?/perl5/man(/.*)?	system_u:object_r:man_t
++/usr/lib(64)?/perl.*\.so	--	system_u:object_r:shlib_t
++/usr/lib(64)?/selinux(/.*)?		system_u:object_r:policy_src_t
++/usr/lib(64)?/emacsen-common/.*	system_u:object_r:bin_t
++/usr/lib(64)?/.*/bin(/.*)?		system_u:object_r:bin_t
++/usr/lib(64)?/gconv/.*\.so	--	system_u:object_r:shlib_t
+ /usr/share/guile/g-wrapped/.*\.so -- system_u:object_r:shlib_t
+ /usr/share/selinux(/.*)?	system_u:object_r:policy_src_t
+ /usr/games(/.*)?		system_u:object_r:bin_t
+ 
+ #
+-# /usr/.*glibc.*-linux/lib
++# /usr/.*glibc.*-linux/lib(64)?
+ #
+-/usr/.*glibc.*-linux/lib(/.*)?	system_u:object_r:lib_t
+-/usr/.*glibc.*-linux/lib/ld.*\.so.* system_u:object_r:ld_so_t
+-/usr/.*glibc.*-linux/lib/lib.*\.so.* system_u:object_r:shlib_t
++/usr/.*glibc.*-linux/lib(64)?(/.*)?	system_u:object_r:lib_t
++/usr/.*glibc.*-linux/lib(64)?/ld.*\.so.* system_u:object_r:ld_so_t
++/usr/.*glibc.*-linux/lib(64)?/lib.*\.so.* system_u:object_r:shlib_t
+ 
+-# /usr/.*redhat-linux/lib
++# /usr/.*redhat-linux/lib(64)?
+ #
+-/usr/.*redhat-linux/lib(/.*)?	system_u:object_r:lib_t
+-/usr/.*redhat-linux/lib/ld.*\.so.* system_u:object_r:ld_so_t
+-/usr/.*redhat-linux/lib/lib.*\.so.* system_u:object_r:shlib_t
++/usr/.*redhat-linux/lib(64)?(/.*)?	system_u:object_r:lib_t
++/usr/.*redhat-linux/lib(64)?/ld.*\.so.* system_u:object_r:ld_so_t
++/usr/.*redhat-linux/lib(64)?/lib.*\.so.* system_u:object_r:shlib_t
+ 
+ #
+-# /usr/.*linux-libc.*/lib
++# /usr/.*linux-libc.*/lib(64)?
+ #
+-/usr/.*linux-libc.*/lib(/.*)? system_u:object_r:lib_t
+-/usr/.*linux-libc.*/lib/ld.*\.so.* system_u:object_r:ld_so_t
+-/usr/.*linux-libc.*/lib/lib.*\.so.* system_u:object_r:shlib_t
++/usr/.*linux-libc.*/lib(64)?(/.*)? system_u:object_r:lib_t
++/usr/.*linux-libc.*/lib(64)?/ld.*\.so.* system_u:object_r:ld_so_t
++/usr/.*linux-libc.*/lib(64)?/lib.*\.so.* system_u:object_r:shlib_t
+ 
+ #
+ # /usr/local
+@@ -332,10 +333,10 @@
+ /usr/local/bin(/.*)?		system_u:object_r:bin_t
+ 
+ #
+-# /usr/local/lib
++# /usr/local/lib(64)?
+ #
+-/usr/local/lib(/.*)?		system_u:object_r:lib_t
+-/usr/local/lib/.*\.so.*	--	system_u:object_r:shlib_t
++/usr/local/lib(64)?(/.*)?		system_u:object_r:lib_t
++/usr/local/lib(64)?/.*\.so.*	--	system_u:object_r:shlib_t
+ 
+ #
+ # /usr/sbin
+@@ -348,10 +349,10 @@
+ /usr/X11R6/(.*/)?bin(/.*)?	system_u:object_r:bin_t
+ 
+ #
+-# /usr/X11R6/(.*/)?lib
++# /usr/X11R6/(.*/)?lib(64)?
+ #
+-/usr/X11R6/(.*/)?lib(/.*)?		system_u:object_r:lib_t
+-/usr/X11R6/(.*/)?lib/lib.*\.so.* --	system_u:object_r:shlib_t
++/usr/X11R6/(.*/)?lib(64)?(/.*)?		system_u:object_r:lib_t
++/usr/X11R6/(.*/)?lib(64)?/lib.*\.so.* --	system_u:object_r:shlib_t
+ 
+ #
+ # /usr/X11R6/man
+@@ -363,18 +364,18 @@
+ #
+ /usr/kerberos/bin(/.*)?		system_u:object_r:bin_t
+ /usr/kerberos/sbin(/.*)?	system_u:object_r:sbin_t
+-/usr/kerberos/lib(/.*)?		system_u:object_r:lib_t
+-/usr/kerberos/lib/lib.*\.so.* -- system_u:object_r:shlib_t
++/usr/kerberos/lib(64)?(/.*)?		system_u:object_r:lib_t
++/usr/kerberos/lib(64)?/lib.*\.so.* -- system_u:object_r:shlib_t
+ 
+ #
+ # /usr/local/selinux
+ #
+ /usr/local/selinux/bin(/.*)?		system_u:object_r:bin_t
+ /usr/local/selinux/sbin(/.*)?		system_u:object_r:bin_t
+-/usr/local/selinux/lib(/.*)?		system_u:object_r:lib_t
++/usr/local/selinux/lib(64)?(/.*)?		system_u:object_r:lib_t
+ /usr/local/selinux/libexec(/.*)?	system_u:object_r:lib_t
+ 
+-/usr/X11R6/lib/X11/fonts(/.*)?		system_u:object_r:fonts_t
++/usr/X11R6/lib(64)?/X11/fonts(/.*)?		system_u:object_r:fonts_t
+ /usr/share/fonts(/.*)?			system_u:object_r:fonts_t
+ 
+ #
+@@ -429,7 +430,7 @@
+ #
+ /usr/share/zoneinfo/.*		system_u:object_r:locale_t
+ /usr/share/locale/.*		system_u:object_r:locale_t
+-/usr/lib/locale/.*		system_u:object_r:locale_t
++/usr/lib(64)?/locale/.*		system_u:object_r:locale_t
+ /etc/localtime		--	system_u:object_r:locale_t
+ /etc/localtime		-l	system_u:object_r:etc_t
+ 
+@@ -442,7 +443,7 @@
+ # The Sun Java development kit, RPM install
+ #
+ /usr/java/j2sdk.*/bin(/.*)?		system_u:object_r:bin_t
+-/usr/java/j2sdk.*/jre/lib/i386(/.*)?	system_u:object_r:lib_t
++/usr/java/j2sdk.*/jre/lib(64)?/i386(/.*)?	system_u:object_r:lib_t
+ 
+ #
+ #  The krb5.conf file is always being tested for writability, so
