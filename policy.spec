@@ -2,7 +2,7 @@ Summary:	SELinux example policy configuration
 Summary(pl):	Przyk³adowa konfiguracja polityki SELinuksa
 Name:		policy
 Version:	1.10
-Release:	0.1
+Release:	0.2
 Epoch:		1
 License:	GPL
 Group:		Base
@@ -10,13 +10,12 @@ Group:		Base
 #Source0:	%{name}-%{version}.tar.bz2
 Source0:	http://www.nsa.gov/selinux/archives/%{name}-%{version}.tgz
 # Source0-md5:	7c36ee68efd14b001eaa28f87564b374
-Patch0:		%{name}-fedora.patch
-Patch1:		%{name}-20040222.patch
-Patch2:		%{name}-sh.patch
-Patch3:		%{name}-iptables.patch
-Patch4:		%{name}-postfix.patch
-Patch5:		%{name}-login.patch
-Patch6:		%{name}-mgetty.patch
+Patch0:		%{name}-sh.patch
+Patch1:		%{name}-iptables.patch
+Patch2:		%{name}-postfix.patch
+Patch3:		%{name}-login.patch
+Patch4:		%{name}-mgetty.patch
+Patch5:		%{name}-apache.patch
 BuildRequires:	checkpolicy >= 1.10
 BuildRequires:	policycoreutils >= 1.10
 BuildRequires:	m4
@@ -76,13 +75,12 @@ polityki. Zawiera policy.conf oraz wszystkie Makefile, makra i pliki
 
 %prep
 %setup -q
-##%patch0 -p1
-##%patch1 -p1
+%patch0 -p1
+%patch1 -p1
 %patch2 -p1
 %patch3 -p1
 %patch4 -p1
 %patch5 -p1
-%patch6 -p1
 
 find . -name '*.orig' | xargs -r rm -f
 
