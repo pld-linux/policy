@@ -1,17 +1,18 @@
---- policy-1.6/domains/program/getty.te.orig	Mon Feb  2 15:42:41 2004
-+++ policy-1.6/domains/program/getty.te	Tue Mar  2 15:29:32 2004
-@@ -31,7 +31,7 @@
- #allow userdomain ttyfile:chr_file getattr;
+--- policy-1.14/domains/program/getty.te.orig	2004-06-16 19:07:45.000000000 +0200
++++ policy-1.14/domains/program/getty.te	2004-07-03 01:40:36.565995112 +0200
+@@ -30,7 +30,7 @@
+ ')
  
  # Use capabilities.
--allow getty_t getty_t:capability { dac_override chown sys_tty_config };
-+allow getty_t getty_t:capability { dac_override chown sys_tty_config fowner fsetid };
+-allow getty_t self:capability { dac_override chown sys_resource sys_tty_config };
++allow getty_t self:capability { dac_override chown sys_resource sys_tty_config fowner fsetid };
  
  # fbgetty needs fsetid for some reason
  #allow getty_t getty_t:capability fsetid;
-@@ -56,4 +56,4 @@
+@@ -56,5 +56,5 @@
  # for error condition handling
  allow getty_t fs_t:filesystem getattr;
  
 -rw_dir_create_file(getty_t, var_lock_t)
 +rw_dir_create_file(getty_t, { var_lock_t var_run_t var_log_t })
+ r_dir_file(getty_t, sysfs_t)

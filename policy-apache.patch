@@ -1,6 +1,6 @@
---- policy-1.10/file_contexts/program/apache.fc.wiget	2004-04-14 22:56:16.265601698 +0200
-+++ policy-1.10/file_contexts/program/apache.fc	2004-04-14 23:03:16.928973570 +0200
-@@ -7,6 +7,7 @@
+--- policy-1.14/file_contexts/program/apache.fc.orig	2004-06-16 19:07:53.000000000 +0200
++++ policy-1.14/file_contexts/program/apache.fc	2004-07-03 01:43:05.659329480 +0200
+@@ -8,6 +8,7 @@
  /var/cache/httpd(/.*)?		system_u:object_r:httpd_cache_t
  /etc/httpd		-d	system_u:object_r:httpd_config_t
  /etc/httpd/conf.*		system_u:object_r:httpd_config_t
@@ -8,7 +8,7 @@
  /etc/httpd/logs			system_u:object_r:httpd_log_t
  /etc/httpd/modules		system_u:object_r:httpd_modules_t
  /etc/apache(2)?(/.*)?		system_u:object_r:httpd_config_t
-@@ -14,7 +15,7 @@
+@@ -15,7 +16,7 @@
  /usr/lib(64)?/apache(/.*)?		system_u:object_r:httpd_modules_t
  /usr/lib(64)?/apache2/modules(/.*)?	system_u:object_r:httpd_modules_t
  /usr/lib(64)?/httpd(/.*)?		system_u:object_r:httpd_modules_t
@@ -17,9 +17,12 @@
  /usr/sbin/apache(2)?	--	system_u:object_r:httpd_exec_t
  /usr/sbin/suexec	--	system_u:object_r:httpd_suexec_exec_t
  /usr/lib(64)?/cgi-bin/(nph-)?cgiwrap(d)? -- system_u:object_r:httpd_suexec_exec_t
-@@ -24,4 +25,4 @@
+@@ -25,7 +26,7 @@
  /var/log/cgiwrap.log.*	--	system_u:object_r:httpd_log_t
  /var/cache/ssl.*\.sem	--	system_u:object_r:httpd_cache_t
  /var/cache/mod_ssl(/.*)?	system_u:object_r:httpd_cache_t
 -/var/run/apache(2)?.pid.* --	system_u:object_r:httpd_var_run_t
 +/var/run/((apache)|(httpd))(2)?.pid.* --	system_u:object_r:httpd_var_run_t
+ /etc/apache-ssl(2)?(/.*)?	system_u:object_r:httpd_config_t
+ /usr/lib/apache-ssl(/.*)? --	system_u:object_r:httpd_exec_t
+ /usr/sbin/apache-ssl(2)? --	system_u:object_r:httpd_exec_t

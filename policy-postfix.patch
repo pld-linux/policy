@@ -55,8 +55,8 @@
  allow pppd_t postfix_master_exec_t:file read;
  allow postfix_postqueue_t pppd_t:fd use;
  allow postfix_postqueue_t pppd_t:process sigchld;
---- policy-1.10/domains/program/unused/postfix.te.wiget	2004-04-05 19:13:55.000000000 +0200
-+++ policy-1.10/domains/program/unused/postfix.te	2004-04-13 22:16:43.909306866 +0200
+--- policy-1.14/domains/program/unused/postfix.te.orig	2004-06-24 14:48:00.000000000 +0200
++++ policy-1.14/domains/program/unused/postfix.te	2004-07-03 01:48:39.745540656 +0200
 @@ -8,8 +8,6 @@
  # Type for files created during execution of postfix.
  type postfix_var_run_t, file_type, sysadmfile, pidfile;
@@ -91,7 +91,7 @@
  read_locale(postfix_$1_t)
  allow postfix_$1_t etc_t:file { getattr read };
  allow postfix_$1_t self:unix_dgram_socket create_socket_perms;
-@@ -123,7 +122,7 @@
+@@ -131,7 +130,7 @@
  # for ls to get the current context
  allow postfix_master_t self:file { getattr read };
  ifdef(`direct_sysadm_daemon', `
@@ -100,7 +100,7 @@
  allow postfix_master_t devpts_t:dir search;
  ')
  
-@@ -203,8 +202,8 @@
+@@ -214,8 +213,8 @@
  allow postfix_cleanup_t self:process setrlimit;
  
  allow user_mail_domain postfix_spool_t:dir r_dir_perms;
@@ -111,11 +111,26 @@
  allow user_mail_domain self:capability dac_override;
  
  define(`postfix_user_domain', `
-@@ -304,3 +303,29 @@
- ifdef(`procmail.te', `
+@@ -321,7 +320,7 @@
  domain_auto_trans(postfix_pipe_t, procmail_exec_t, procmail_t)
  ')
-+
+ ifdef(`sendmail.te', `
+-allow sendmail_t postfix_etc_t:dir { search };
++allow sendmail_t etc_mail_t:dir { search };
+ ')
+ 
+ # Program for creating database files
+@@ -329,9 +328,34 @@
+ base_file_read_access(postfix_map_t)
+ allow postfix_map_t { etc_t etc_runtime_t }:{ file lnk_file } { getattr read };
+ tmp_domain(postfix_map)
+-create_dir_file(postfix_map_t, postfix_etc_t)
++create_dir_file(postfix_map_t, etc_mail_t)
+ allow postfix_map_t self:unix_stream_socket create_stream_socket_perms;
+ dontaudit postfix_map_t proc_t:dir { getattr read search };
+ dontaudit postfix_map_t local_login_t:fd { use };
+ allow postfix_master_t postfix_map_exec_t:file rx_file_perms;
+ 
 +# postsuper (incl. -d) for sysadm
 +postfix_user_domain(postsuper)
 +can_exec(postfix_master_t, postfix_postsuper_exec_t)
