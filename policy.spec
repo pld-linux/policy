@@ -79,6 +79,8 @@ install -d $RPM_BUILD_ROOT%{_sysconfdir}/security/selinux
 %{__make} install install-src \
 	DESTDIR=$RPM_BUILD_ROOT
 
+rm -f $RPM_BUILD_ROOT%{_sysconfdir}/security/selinux/src/policy/{COPYING,ChangeLog,README,VERSION,policy.spec,policy.15}
+
 %clean
 rm -rf $RPM_BUILD_ROOT
 
@@ -90,10 +92,11 @@ rm -rf $RPM_BUILD_ROOT
 
 %files sources
 %defattr(644,root,root,755)
+%doc ChangeLog README
 # XXX: duplicate
 %dir %{_sysconfdir}/security/selinux
 %dir %{_sysconfdir}/security/selinux/src
 %{_sysconfdir}/security/selinux/src/policy.conf
 %dir %{_sysconfdir}/security/selinux/src/policy
 %config(noreplace) %verify(not size mtime md5) %{_sysconfdir}/security/selinux/src/policy/users
-%{_sysconfdir}/security/selinux/src/policy/*
+%{_sysconfdir}/security/selinux/src/policy/[!u]*
