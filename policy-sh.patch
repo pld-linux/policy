@@ -1,0 +1,10 @@
+--- policy-1.4.15/file_contexts/types.fc.orig	Tue Feb 17 13:53:21 2004
++++ policy-1.4.15/file_contexts/types.fc	Wed Feb 18 11:06:17 2004
+@@ -90,6 +90,7 @@
+ # /bin
+ #
+ /bin(/.*)?			system_u:object_r:bin_t
++/bin/k?sh		--	system_u:object_r:shell_exec_t
+ /bin/tcsh		--	system_u:object_r:shell_exec_t
+ /bin/bash		--	system_u:object_r:shell_exec_t
+ /bin/bash2		--	system_u:object_r:shell_exec_t
