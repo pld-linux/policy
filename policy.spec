@@ -1,8 +1,7 @@
+# enter date when you got the policy
 %define	snap	20031226
 Summary:	SELinux example policy configuration
 Name:		policy
-# enter date when you got the policy
-%define snap    20031226
 Version:	1.4_%{snap}
 Release:	1
 License:	GPL
