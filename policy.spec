@@ -2,7 +2,7 @@ Summary:	SELinux example policy configuration
 Summary(pl):	Przyk³adowa konfiguracja polityki SELinuksa
 Name:		policy
 Version:	1.10
-Release:	0.2
+Release:	0.3
 Epoch:		1
 License:	GPL
 Group:		Base
@@ -127,4 +127,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_sysconfdir}/security/selinux/src/policy.conf
 %dir %{_sysconfdir}/security/selinux/src/policy
 %config(noreplace) %verify(not size mtime md5) %{_sysconfdir}/security/selinux/src/policy/users
-%{_sysconfdir}/security/selinux/src/policy/[!u]*
+%config(noreplace) %verify(not size mtime md5) %{_sysconfdir}/security/selinux/src/policy/tunable.te
+%{_sysconfdir}/security/selinux/src/policy/[!ut]*
+%{_sysconfdir}/security/selinux/src/policy/types
+%{_sysconfdir}/security/selinux/src/policy/tmp
