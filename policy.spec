@@ -2,7 +2,7 @@ Summary:	SELinux example policy configuration
 Summary(pl):	Przyk³adowa konfiguracja polityki SELinuksa
 Name:		policy
 Version:	1.6
-Release:	2
+Release:	3
 Epoch:		1
 License:	GPL
 Group:		Base
@@ -93,6 +93,8 @@ mv -f domains/program/{dpk*,gatekeeper*,qmail*} domains/program/unused
 %build
 %{__make} file_contexts/file_contexts
 %{__make} policy
+%{__make} policy \
+	POLICYCOMPAT="-c"
 
 %install
 rm -rf $RPM_BUILD_ROOT
@@ -101,7 +103,9 @@ install -d $RPM_BUILD_ROOT%{_sysconfdir}/security/selinux
 %{__make} install install-src \
 	DESTDIR=$RPM_BUILD_ROOT
 
-rm -f $RPM_BUILD_ROOT%{_sysconfdir}/security/selinux/src/policy/{COPYING,ChangeLog,README,VERSION,policy.spec,policy.15}
+install policy.15 $RPM_BUILD_ROOT%{_sysconfdir}/security/selinux
+
+rm -f $RPM_BUILD_ROOT%{_sysconfdir}/security/selinux/src/policy/{COPYING,ChangeLog,README,VERSION,policy.spec}
 
 %clean
 rm -rf $RPM_BUILD_ROOT
