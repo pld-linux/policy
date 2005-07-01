@@ -8,22 +8,26 @@
  ifdef(`postfix.te', `', `
  /usr/sbin/sendmail.postfix --	system_u:object_r:sendmail_exec_t
  /var/spool/postfix(/.*)?		system_u:object_r:mail_spool_t
---- policy-1.18/file_contexts/program/postfix.fc.orig	2004-10-13 22:16:18.000000000 +0200
-+++ policy-1.18/file_contexts/program/postfix.fc	2004-11-04 21:55:49.397515200 +0100
-@@ -1,10 +1,6 @@
+--- policy-1.24/file_contexts/program/postfix.fc.orig	2005-05-23 21:20:04.000000000 +0200
++++ policy-1.24/file_contexts/program/postfix.fc	2005-07-02 00:39:33.974529480 +0200
+@@ -1,5 +1,4 @@
  # postfix
 -/etc/postfix(/.*)?		system_u:object_r:postfix_etc_t
--ifdef(`distro_redhat', `
--/etc/postfix/aliases.*		system_u:object_r:etc_aliases_t
--')
+ ifdef(`distro_redhat', `
+ /etc/postfix/aliases.*		system_u:object_r:etc_aliases_t
+ /usr/libexec/postfix/.*	--	system_u:object_r:postfix_exec_t
+@@ -26,8 +25,8 @@
+ /usr/lib/postfix/bounce	--	system_u:object_r:postfix_bounce_exec_t
+ /usr/lib/postfix/pipe	--	system_u:object_r:postfix_pipe_exec_t
+ ')
 -/etc/postfix/postfix-script.* -- system_u:object_r:postfix_exec_t
 -/etc/postfix/prng_exch	--	system_u:object_r:postfix_prng_t
 +/etc/mail/postfix-script.* -- system_u:object_r:postfix_exec_t
 +/etc/mail/prng_exch	--	system_u:object_r:postfix_prng_t
- /usr/lib(exec)?/postfix/.*	--	system_u:object_r:postfix_exec_t
- /usr/lib(exec)?/postfix/cleanup --	system_u:object_r:postfix_cleanup_exec_t
- /usr/lib(exec)?/postfix/local	--	system_u:object_r:postfix_local_exec_t
-@@ -25,7 +21,7 @@
+ /usr/sbin/postalias	--	system_u:object_r:postfix_master_exec_t
+ /usr/sbin/postcat	--	system_u:object_r:postfix_master_exec_t
+ /usr/sbin/postdrop	--	system_u:object_r:postfix_postdrop_exec_t
+@@ -37,7 +36,7 @@
  /usr/sbin/postlog	--	system_u:object_r:postfix_master_exec_t
  /usr/sbin/postmap	--	system_u:object_r:postfix_map_exec_t
  /usr/sbin/postqueue	--	system_u:object_r:postfix_postqueue_exec_t
@@ -31,7 +35,7 @@
 +/usr/sbin/postsuper	--	system_u:object_r:postfix_postsuper_exec_t
  /usr/sbin/rmail		--	system_u:object_r:sendmail_exec_t
  /usr/sbin/sendmail.postfix --	system_u:object_r:sendmail_exec_t
- /var/spool/postfix(/[^/]+)?	system_u:object_r:postfix_spool_t
+ /var/spool/postfix(/.*)?	system_u:object_r:postfix_spool_t
 --- policy-1.20/file_contexts/program/sendmail.fc.orig	2004-12-02 14:31:53.000000000 +0100
 +++ policy-1.20/file_contexts/program/sendmail.fc	2005-01-08 18:16:21.982327544 +0100
 @@ -1,5 +1,4 @@
@@ -40,18 +44,18 @@
  /var/log/sendmail\.st		--	system_u:object_r:sendmail_log_t
  /var/log/mail(/.*)?			system_u:object_r:sendmail_log_t
  /var/run/sendmail\.pid		--	system_u:object_r:sendmail_var_run_t
---- policy-1.22/domains/program/unused/mta.te.orig	2005-02-16 20:40:15.000000000 +0100
-+++ policy-1.22/domains/program/unused/mta.te	2005-03-12 01:50:45.860801664 +0100
-@@ -83,3 +83,6 @@
- ')
+--- policy-1.24/domains/program/unused/mta.te.orig	2005-05-23 21:20:02.000000000 +0200
++++ policy-1.24/domains/program/unused/mta.te	2005-07-02 00:40:00.294528232 +0200
+@@ -72,3 +72,6 @@
+ 
  allow system_mail_t etc_runtime_t:file { getattr read };
- allow system_mail_t urandom_device_t:chr_file read;
+ allow system_mail_t { random_device_t urandom_device_t }:chr_file read;
 +
 +# etc_mail_t is the type of /etc/mail.
 +type etc_mail_t, file_type, sysadmfile, usercanread;
---- policy-1.10/domains/program/unused/pppd.te.wiget	2004-04-05 19:13:55.000000000 +0200
-+++ policy-1.10/domains/program/unused/pppd.te	2004-04-13 22:15:30.436468077 +0200
-@@ -42,8 +42,8 @@
+--- policy-1.24/domains/program/unused/pppd.te.orig	2005-05-23 21:20:02.000000000 +0200
++++ policy-1.24/domains/program/unused/pppd.te	2005-07-02 00:40:23.013074488 +0200
+@@ -44,8 +44,8 @@
  allow pppd_t pppd_secret_t:file r_file_perms;
  
  ifdef(`postfix.te', `
@@ -59,21 +63,20 @@
 -allow pppd_t postfix_etc_t:file r_file_perms;
 +allow pppd_t etc_mail_t:dir search;
 +allow pppd_t etc_mail_t:file r_file_perms;
- allow pppd_t postfix_master_exec_t:file read;
+ allow pppd_t postfix_master_exec_t:file { getattr read };
  allow postfix_postqueue_t pppd_t:fd use;
  allow postfix_postqueue_t pppd_t:process sigchld;
---- policy-1.20/domains/program/unused/postfix.te.orig	2005-01-05 17:38:40.000000000 +0100
-+++ policy-1.20/domains/program/unused/postfix.te	2005-01-08 18:17:37.279880576 +0100
-@@ -8,8 +8,6 @@
+--- policy-1.24/domains/program/unused/postfix.te.orig	2005-05-06 21:52:57.000000000 +0200
++++ policy-1.24/domains/program/unused/postfix.te	2005-07-02 00:41:28.461124872 +0200
+@@ -8,7 +8,6 @@
  # Type for files created during execution of postfix.
  type postfix_var_run_t, file_type, sysadmfile, pidfile;
  
 -type postfix_etc_t, file_type, sysadmfile;
--typealias postfix_etc_t alias etc_postfix_t;
  type postfix_exec_t, file_type, sysadmfile, exec_type;
  type postfix_public_t, file_type, sysadmfile;
  type postfix_private_t, file_type, sysadmfile;
-@@ -20,6 +18,7 @@
+@@ -19,6 +18,7 @@
  
  # postfix needs this for newaliases
  allow { system_mail_t sysadm_mail_t } tmp_t:dir getattr;
@@ -81,7 +84,7 @@
  
  #################################
  #
-@@ -28,13 +27,13 @@
+@@ -27,13 +27,13 @@
  # postfix_$1_exec_t is the type of the postfix_$1 executables.
  #
  define(`postfix_domain', `
@@ -98,7 +101,16 @@
  read_locale(postfix_$1_t)
  allow postfix_$1_t etc_t:file { getattr read };
  allow postfix_$1_t self:unix_dgram_socket create_socket_perms;
-@@ -96,7 +95,7 @@
+@@ -79,7 +79,7 @@
+ domain_auto_trans(sysadm_t, postfix_master_exec_t, postfix_master_t)
+ allow sysadm_t postfix_master_t:process { noatsecure siginh rlimitinh };
+ role_transition sysadm_r postfix_master_exec_t system_r;
+-allow postfix_master_t postfix_etc_t:file rw_file_perms;
++allow postfix_master_t etc_mail_t:file rw_file_perms;
+ dontaudit postfix_master_t admin_tty_type:chr_file { read write };
+ allow postfix_master_t devpts_t:dir search;
+ 
+@@ -97,7 +97,7 @@
  dontaudit postfix_master_t selinux_config_t:dir search;
  can_exec({ sysadm_mail_t system_mail_t }, postfix_master_exec_t)
  ifdef(`distro_redhat', `
@@ -107,16 +119,7 @@
  ', `
  file_type_auto_trans({ sysadm_mail_t system_mail_t }, etc_t, etc_aliases_t)
  ')
-@@ -140,7 +139,7 @@
- # for ls to get the current context
- allow postfix_master_t self:file { getattr read };
- ifdef(`direct_sysadm_daemon', `
--allow postfix_master_t postfix_etc_t:file rw_file_perms;
-+allow postfix_master_t etc_mail_t:file rw_file_perms;
- allow postfix_master_t devpts_t:dir search;
- ')
- 
-@@ -226,8 +225,8 @@
+@@ -222,8 +222,8 @@
  allow postfix_cleanup_t self:process setrlimit;
  
  allow user_mail_domain postfix_spool_t:dir r_dir_perms;
@@ -127,7 +130,7 @@
  allow user_mail_domain self:capability dac_override;
  
  define(`postfix_user_domain', `
-@@ -335,7 +334,7 @@
+@@ -329,7 +329,7 @@
  domain_auto_trans(postfix_pipe_t, procmail_exec_t, procmail_t)
  ')
  ifdef(`sendmail.te', `
@@ -136,7 +139,7 @@
  ')
  
  # Program for creating database files
-@@ -343,7 +342,7 @@
+@@ -337,7 +337,7 @@
  base_file_read_access(postfix_map_t)
  allow postfix_map_t { etc_t etc_runtime_t }:{ file lnk_file } { getattr read };
  tmp_domain(postfix_map)
@@ -145,8 +148,8 @@
  allow postfix_map_t self:unix_stream_socket create_stream_socket_perms;
  dontaudit postfix_map_t proc_t:dir { getattr read search };
  dontaudit postfix_map_t local_login_t:fd use;
-@@ -355,3 +354,29 @@
- can_network_server(postfix_map_t)
+@@ -350,3 +350,29 @@
+ allow postfix_map_t port_type:tcp_socket name_connect;
  allow postfix_local_t mail_spool_t:dir { remove_name };
  allow postfix_local_t mail_spool_t:file { unlink };
 +
