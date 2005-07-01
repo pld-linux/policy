@@ -1,21 +1,21 @@
 Summary:	SELinux example policy configuration
 Summary(pl):	Przyk³adowa konfiguracja polityki SELinuksa
 Name:		policy
-Version:	1.22
+Version:	1.24
 Release:	0.1
 Epoch:		1
 License:	GPL
 Group:		Base
 Source0:	http://www.nsa.gov/selinux/archives/%{name}-%{version}.tgz
-# Source0-md5:	9dffdbc2289a2edb48d02bf7fa23ddb0
+# Source0-md5:	fb701f2d210b31925049f518978a6c0a
 Patch0:		%{name}-sh.patch
 Patch1:		%{name}-iptables.patch
 Patch2:		%{name}-postfix.patch
 Patch3:		%{name}-login.patch
 Patch4:		%{name}-mgetty.patch
 Patch5:		%{name}-apache.patch
-BuildRequires:	checkpolicy >= 1.22
-BuildRequires:	policycoreutils >= 1.22
+BuildRequires:	checkpolicy >= 1.24
+BuildRequires:	policycoreutils >= 1.24
 BuildRequires:	m4
 BuildArch:	noarch
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
@@ -61,7 +61,7 @@ Group:		Base
 Requires:	%{name} = %{epoch}:%{version}-%{release}
 Requires:	m4
 Requires:	make
-Requires:	policycoreutils >= 1.22
+Requires:	policycoreutils >= 1.24
 
 %description sources
 This subpackage includes the source files used to build the policy
@@ -86,7 +86,7 @@ find . -name '*.orig' | xargs -r rm -f
 
 mv -f domains/misc/unused/* domains/misc
 mv -f domains/program/unused/* domains/program
-mv -f domains/program/{dpk*,gatekeeper*,qmail*} domains/program/unused
+mv -f domains/program/{dpk*,gatekeeper*,qmail*,nx_server*} domains/program/unused
 
 %build
 %{__make} file_contexts/file_contexts
