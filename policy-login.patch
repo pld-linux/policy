@@ -1,11 +1,11 @@
---- policy-1.6/domains/program/login.te.orig	Tue Feb 17 19:36:50 2004
-+++ policy-1.6/domains/program/login.te	Tue Mar  2 15:30:27 2004
-@@ -93,7 +93,7 @@
+--- policy-1.26/domains/program/login.te.orig	2005-07-11 20:24:29.000000000 +0200
++++ policy-1.26/domains/program/login.te	2005-09-23 10:05:55.294983512 +0200
+@@ -111,7 +111,7 @@
  allow $1_login_t lastlog_t:file rw_file_perms;
  
  # Write to /var/log/btmp
--allow $1_login_t faillog_t:file { append read write };
-+allow $1_login_t faillog_t:file { append read write getattr };
+-allow $1_login_t faillog_t:file { lock append read write };
++allow $1_login_t faillog_t:file { lock append read write getattr };
  
  # Search for mail spool file.
  allow $1_login_t mail_spool_t:dir r_dir_perms;
