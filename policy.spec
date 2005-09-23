@@ -1,21 +1,30 @@
+# TODO - doesn't build because of some non-obvious assertion violations:
+#  /usr/bin/checkpolicy  -o policy.20 policy.conf
+#  /usr/bin/checkpolicy:  loading policy configuration from policy.conf
+#  Assertion on line 497922 violated by allow kernel_t etc_t:file { write create setattr append unlink link rename };
+#  Assertion on line 497921 violated by allow kernel_t etc_t:lnk_file { create setattr unlink link rename };
+#  Assertion on line 497920 violated by allow kernel_t etc_t:dir { create setattr unlink link rename reparent rmdir };
+#  3 assertion violations occured
+#  Check assertions failed.
+#
 Summary:	SELinux example policy configuration
 Summary(pl):	Przyk³adowa konfiguracja polityki SELinuksa
 Name:		policy
-Version:	1.24
+Version:	1.26
 Release:	0.1
 Epoch:		1
 License:	GPL
 Group:		Base
 Source0:	http://www.nsa.gov/selinux/archives/%{name}-%{version}.tgz
-# Source0-md5:	fb701f2d210b31925049f518978a6c0a
+# Source0-md5:	74d5bcfeee81552a57811e7055f319e5
 Patch0:		%{name}-sh.patch
 Patch1:		%{name}-iptables.patch
 Patch2:		%{name}-postfix.patch
 Patch3:		%{name}-login.patch
 Patch4:		%{name}-mgetty.patch
 Patch5:		%{name}-apache.patch
-BuildRequires:	checkpolicy >= 1.24
-BuildRequires:	policycoreutils >= 1.24
+BuildRequires:	checkpolicy >= 1.26
+BuildRequires:	policycoreutils >= 1.26
 BuildRequires:	m4
 BuildArch:	noarch
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
@@ -61,7 +70,7 @@ Group:		Base
 Requires:	%{name} = %{epoch}:%{version}-%{release}
 Requires:	m4
 Requires:	make
-Requires:	policycoreutils >= 1.24
+Requires:	policycoreutils >= 1.26
 
 %description sources
 This subpackage includes the source files used to build the policy
