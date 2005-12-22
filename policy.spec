@@ -1,30 +1,25 @@
-# TODO - doesn't build because of some non-obvious assertion violations:
-#  /usr/bin/checkpolicy  -o policy.20 policy.conf
-#  /usr/bin/checkpolicy:  loading policy configuration from policy.conf
-#  Assertion on line 497922 violated by allow kernel_t etc_t:file { write create setattr append unlink link rename };
-#  Assertion on line 497921 violated by allow kernel_t etc_t:lnk_file { create setattr unlink link rename };
-#  Assertion on line 497920 violated by allow kernel_t etc_t:dir { create setattr unlink link rename reparent rmdir };
-#  3 assertion violations occured
-#  Check assertions failed.
+#
+# Conditional build:
+%bcond_with	selinux24	# build old SELinux-compatible policy (ver. 15)
 #
 Summary:	SELinux example policy configuration
 Summary(pl):	Przyk³adowa konfiguracja polityki SELinuksa
 Name:		policy
-Version:	1.26
-Release:	0.1
+Version:	1.28
+Release:	1
 Epoch:		1
 License:	GPL
 Group:		Base
 Source0:	http://www.nsa.gov/selinux/archives/%{name}-%{version}.tgz
-# Source0-md5:	74d5bcfeee81552a57811e7055f319e5
+# Source0-md5:	d9b5b04d823e08dec1f5710143b60741
 Patch0:		%{name}-sh.patch
 Patch1:		%{name}-iptables.patch
 Patch2:		%{name}-postfix.patch
 Patch3:		%{name}-login.patch
 Patch4:		%{name}-mgetty.patch
 Patch5:		%{name}-apache.patch
-BuildRequires:	checkpolicy >= 1.26
-BuildRequires:	policycoreutils >= 1.26
+BuildRequires:	checkpolicy >= 1.28
+BuildRequires:	policycoreutils >= 1.28
 BuildRequires:	m4
 BuildArch:	noarch
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
@@ -100,9 +95,12 @@ mv -f domains/program/{dpk*,gatekeeper*,qmail*,nx_server*} domains/program/unuse
 %build
 %{__make} file_contexts/file_contexts
 %{__make} policy
+
+%if %{with selinux24}
 # for 2.4.26+selinux or <=2.6.5
 %{__make} policy \
 	POLICYCOMPAT="-c 15"
+%endif
 
 %install
 rm -rf $RPM_BUILD_ROOT
@@ -110,9 +108,11 @@ rm -rf $RPM_BUILD_ROOT
 %{__make} install install-src \
 	DESTDIR=$RPM_BUILD_ROOT
 
+%if %{with selinux24}
 install policy.15 $RPM_BUILD_ROOT%{_sysconfdir}/selinux/%{poltype}/policy
+%endif
 
-rm -f $RPM_BUILD_ROOT%{_sysconfdir}/selinux/%{poltype}/src/policy/{COPYING,ChangeLog,README,VERSION,policy.spec,policy.1[58]}
+rm -f $RPM_BUILD_ROOT%{_sysconfdir}/selinux/%{poltype}/src/policy/{COPYING,ChangeLog,README,VERSION,policy.spec,policy.[12][0-9]}
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -130,6 +130,7 @@ rm -rf $RPM_BUILD_ROOT
 %config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/selinux/%{poltype}/contexts/files/file_contexts.homedirs
 %{_sysconfdir}/selinux/%{poltype}/contexts/files/homedir_template
 %config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/selinux/%{poltype}/contexts/files/media
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/selinux/%{poltype}/contexts/port_types
 %dir %{_sysconfdir}/selinux/%{poltype}/contexts/users
 %config(noreplace) %verify(not md5 mtime size) %dir %{_sysconfdir}/selinux/%{poltype}/contexts/users/root
 %dir %{_sysconfdir}/selinux/%{poltype}/users
