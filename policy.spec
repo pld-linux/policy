@@ -93,8 +93,8 @@ mv -f domains/program/unused/* domains/program
 mv -f domains/program/{dpk*,gatekeeper*,qmail*,nx_server*} domains/program/unused
 
 %build
-%{__make} file_contexts/file_contexts
-%{__make} policy
+%{__make} TYPE=%{poltype} file_contexts/file_contexts
+%{__make} TYPE=%{poltype} policy
 
 %if %{with selinux24}
 # for 2.4.26+selinux or <=2.6.5
@@ -106,6 +106,7 @@ mv -f domains/program/{dpk*,gatekeeper*,qmail*,nx_server*} domains/program/unuse
 rm -rf $RPM_BUILD_ROOT
 
 %{__make} install install-src \
+	TYPE=%{poltype} \
 	DESTDIR=$RPM_BUILD_ROOT
 
 %if %{with selinux24}
@@ -127,7 +128,7 @@ rm -rf $RPM_BUILD_ROOT
 %config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/selinux/%{poltype}/contexts/*_context*
 %dir %{_sysconfdir}/selinux/%{poltype}/contexts/files
 %config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/selinux/%{poltype}/contexts/files/file_contexts
-%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/selinux/%{poltype}/contexts/files/file_contexts.homedirs
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/selinux/%{poltype}/contexts/files/homedir_template
 %{_sysconfdir}/selinux/%{poltype}/contexts/files/homedir_template
 %config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/selinux/%{poltype}/contexts/files/media
 %config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/selinux/%{poltype}/contexts/port_types
