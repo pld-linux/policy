@@ -3,7 +3,7 @@
 %bcond_with	selinux24	# build old SELinux-compatible policy (ver. 15)
 #
 Summary:	SELinux example policy configuration
-Summary(pl.UTF-8):   Przykładowa konfiguracja polityki SELinuksa
+Summary(pl.UTF-8):	Przykładowa konfiguracja polityki SELinuksa
 Name:		policy
 Version:	1.28
 Release:	1
@@ -60,7 +60,7 @@ aplikacji.
 
 %package sources
 Summary:	SELinux example policy configuration source files
-Summary(pl.UTF-8):   Pliki źródłowe przykładowej konfiguracji polityki SELinuksa
+Summary(pl.UTF-8):	Pliki źródłowe przykładowej konfiguracji polityki SELinuksa
 Group:		Base
 Requires:	%{name} = %{epoch}:%{version}-%{release}
 Requires:	m4
