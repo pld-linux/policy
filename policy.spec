@@ -18,6 +18,7 @@ Patch2:		%{name}-postfix.patch
 Patch3:		%{name}-login.patch
 Patch4:		%{name}-mgetty.patch
 Patch5:		%{name}-apache.patch
+Patch6:		%{name}-Makefile.patch
 BuildRequires:	checkpolicy >= 1.28
 BuildRequires:	policycoreutils >= 1.28
 BuildRequires:	m4
@@ -85,6 +86,7 @@ polityki. Zawiera policy.conf oraz wszystkie Makefile, makra i pliki
 %patch3 -p1
 %patch4 -p1
 %patch5 -p1
+%patch6 -p0
 
 find . -name '*.orig' | xargs -r rm -f
 
@@ -94,12 +96,11 @@ mv -f domains/program/{dpk*,gatekeeper*,qmail*,nx_server*} domains/program/unuse
 
 %build
 %{__make} TYPE=%{poltype} file_contexts/file_contexts
-%{__make} TYPE=%{poltype} policy SBINDIR=/sbin
+%{__make} TYPE=%{poltype} policy
 
 %if %{with selinux24}
 # for 2.4.26+selinux or <=2.6.5
 %{__make} policy \
-	SBINDIR=/sbin \
 	POLICYCOMPAT="-c 15"
 %endif
 
@@ -108,7 +109,6 @@ rm -rf $RPM_BUILD_ROOT
 
 %{__make} install install-src \
 	TYPE=%{poltype} \
-	SBINDIR=/sbin \
 	DESTDIR=$RPM_BUILD_ROOT
 
 %if %{with selinux24}

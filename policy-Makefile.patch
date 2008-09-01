@@ -1,0 +1,11 @@
+--- Makefile.orig	2008-09-01 18:34:20.361456750 +0200
++++ Makefile	2008-09-01 18:35:10.164569250 +0200
+@@ -25,7 +25,7 @@
+ LOADPOLICY  = $(SBINDIR)/load_policy
+ CHECKPOLICY = $(BINDIR)/checkpolicy
+ GENHOMEDIRCON = $(SBINDIR)/genhomedircon
+-SETFILES = $(SBINDIR)/setfiles
++SETFILES = /sbin/setfiles
+ VERS := $(shell $(CHECKPOLICY) $(POLICYCOMPAT) -V |cut -f 1 -d ' ')
+ PREVERS := 20
+ KERNVERS := $(shell cat /selinux/policyvers)
