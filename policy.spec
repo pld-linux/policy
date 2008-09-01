@@ -6,7 +6,7 @@ Summary:	SELinux example policy configuration
 Summary(pl.UTF-8):	Przykładowa konfiguracja polityki SELinuksa
 Name:		policy
 Version:	1.28
-Release:	1
+Release:	2
 Epoch:		1
 License:	GPL
 Group:		Base
@@ -94,11 +94,12 @@ mv -f domains/program/{dpk*,gatekeeper*,qmail*,nx_server*} domains/program/unuse
 
 %build
 %{__make} TYPE=%{poltype} file_contexts/file_contexts
-%{__make} TYPE=%{poltype} policy
+%{__make} TYPE=%{poltype} policy SBINDIR=/sbin
 
 %if %{with selinux24}
 # for 2.4.26+selinux or <=2.6.5
 %{__make} policy \
+	SBINDIR=/sbin \
 	POLICYCOMPAT="-c 15"
 %endif
 
@@ -107,6 +108,7 @@ rm -rf $RPM_BUILD_ROOT
 
 %{__make} install install-src \
 	TYPE=%{poltype} \
+	SBINDIR=/sbin \
 	DESTDIR=$RPM_BUILD_ROOT
 
 %if %{with selinux24}
